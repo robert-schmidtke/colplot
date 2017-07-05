@@ -1,0 +1,112 @@
+#!/bin/bash
+
+BINDIR=/usr/bin
+DOCDIR=/usr/share/doc/collectl-utils
+SHRDIR=/usr/share/collectl
+
+mkdir -p $DOCDIR
+mkdir -p $SHRDIR
+mkdir -p $SHRDIR/plotfiles
+mkdir -p $SHRDIR/util
+
+cp colplot.conf             /etc
+cp colplot                  $BINDIR
+cp GPL ARTISTIC             $DOCDIR
+cp FAQ* README RELEASE*     $DOCDIR
+cp colplot-help.html        $DOCDIR
+cp colplotlib.ph            $SHRDIR 
+cp colplotlib.defs          $SHRDIR
+cp tiny.ph oneperpage.ph    $SHRDIR
+cp colplot-apache.conf      $SHRDIR
+cp plotfiles/*              $SHRDIR/plotfiles
+cp man1/*.1*                /usr/share/man/man1
+
+# compress any uncompressed man pages
+gzip $RPM_BUILD_ROOT/usr/share/man/man1/colplot.1
+
+#    D e a l    W i t h    A p a c h e
+
+# I have no idea what structures or version exist in different distros so for now
+# let's just maximize flexibilityby defining distro specific parameters
+ctl=''
+apache2=0
+www='/var/www/html'
+if [ -f /usr/sbin/apachectl ] || [ -f /usr/sbin/apache2ctl ]; then
+  if [ -f /usr/sbin/apache2ctl ]; then
+    apache2=1
+  fi
+
+  if [ -f /etc/redhat-release ]; then
+    www=/var/www/html
+    ctl=/usr/sbin/apachectl
+    confd=/etc/httpd/conf.d
+  fi
+
+  if [ -f /etc/SuSE-release ]; then
+    www=/srv/www/htdocs
+    ctl=/usr/sbin/apache2ctl
+    confd=/etc/apache2/conf.d
+  fi
+
+  if [ -f /etc/debian_version ]; then
+    www=/var/www/
+    ctl=/usr/sbin/apachectl
+    confd=/etc/apache2/sites-available
+    conf2=/etc/apache2/sites-enabled
+  fi
+else
+    echo "apache not installed, either install it or manually configure colplot"
+fi
+
+# whether apache is installed or not, it's useful to collect all
+# the web content in one place
+if [ ! -e $www/colplot ]; then
+   echo "creating $www/colplot"
+   mkdir -p $www/colplot
+fi
+
+# Build some symlinks to these
+echo "building symlinks in $www/colplot"
+cd $www/colplot
+ln -sf $BINDIR/colplot index.cgi
+ln -sf $DOCDIR/colplot-help.html
+ln -sf $DOCDIR/FAQ-colplot.html
+
+if [ "$ctl" = "" ]
+then
+  echo "sorry, not further support for your distro.  you have to manually configure the rest"
+fi
+
+if [ -e $ctl ]
+then
+  echo "configuring apache to run colplot..."
+  if [ ! -e $confd/colplot.conf ]; then
+    echo "copying $SHRDIR/colplot-apache.conf to $confd/colplot.conf"
+    cp $SHRDIR/colplot-apache.conf $confd/colplot-apache.conf
+  fi
+
+  if [ $apache2 -eq 1 ]; then
+    echo "Configuring apache2 to run colplot"
+    a2ensite colplot-apache.conf
+    a2enmod cgi
+  fi
+
+  # on suse change /var/www/html to /srv/www/htdocs
+  if [ -f /etc/SuSE-release ]; then
+      sed -i "s:/var/www/html:/srv/www/htdocs:" $confd/colplot-apache.conf
+  fi
+
+  # on debian change /var/www/html to /var/www
+  if [ -f /etc/debian_version ]; then
+      sed -i "s:/html::" $confd/colplot-apache.conf
+  fi
+
+  # I figure it's rude to restart apache unless you have to as with apache2
+  if [ $apache2 -eq 1 ]; then
+    echo "Restarting apache"
+    service apache2 restart
+  else
+    echo "You may have to restart apache"
+  fi
+
+fi

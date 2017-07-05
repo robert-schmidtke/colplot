@@ -1,0 +1,315 @@
+<html>
+<body>
+
+<h1><center>colplot Help</center></h1>
+
+First and foremost, the focus on this help is on usability and not intended 
+to be a lesson in how to <a href=http://collectl.sourceforge.net/Playback.html>
+generate data in plot format</a>,
+how to choose which data to display, how to display it (from a formatting
+perspective) or how to interpret the results.
+
+<p><b>The Methodology</b>
+<br>
+Colplot is not a general purpose plotting package, but rather one intimately tied
+into collectl data file formats and naming conventions.  Its purpose is to plot data 
+files within a particular time frame which are all in the same directory,
+having no capability to look
+in multiple locations.  This means if you want to plot data for 2 systems, you need
+to put all associated data files in the same directory.  The general convention used
+is to have a separate directory that just contains plottable data files, but if there
+are non-plottable files in that directory colplot will ignore them.  However, your life
+will be much easier if you limit that directory to plot files.
+<p>
+Since colplot uses gnuplot to generate the plots and since gnuplot cannot handle
+compressed files, you must make sure your plot files are not compressed.  If they
+are, colplot will ignore them and either not generate any plots or simply generate
+plots for those files that aren't compressed.
+<p>
+Colplot uses the metaphor of a speadsheet to display its plots, the default being rows of
+a particular type of a plot and columns of different systems (if only plotting data
+of a single type or for a single system this will collapse into a single column).
+If you prefer your <i>spreadsheet</i> to be ordered differently, you can change the
+arragement with the <i>Display</i> pulldown menu.  When geneating plots, colplot will
+put data for multiple days into the same plot which can result in a very dense (and
+possibly unreadable) plot.   Your choices are then to either choose a shorter timeframe
+OR to choose a <i>Display</i> that includes the day as one of the sort criteria which
+with then generate a separate plot for each day.
+<p>
+A number of check boxes are provided that allow you to choose individual
+plots OR a couple of macros that select all of a particular type.  There are many more
+plots available to you than have check boxes and these must be chosen by name if you
+want to select one of them.  To see the full list of available plots simply click on
+the <i>Help</i> button next to the <i>Plots by Name(s):</i> field.
+<p>
+The following section describes all the fields on the colplot form in the order they occur.
+
+<p><b>What is the purpose of <i>Enable Refresh</i>?</b>?
+<br>This is a mode in which a plot is redrawn at a user selectable 
+frequency, specified in seconds, resulting in pseudo-real time plots. 
+In conjunction with <i>refresh</i> one can either select a time scale or
+request the <i>last</i> n-minutes of data be displayed by selecting the
+corresponding radio button.
+<p>
+The key to making this all work is to select files for the 
+current day that are continuously being updated by <i>collectl</i> in 
+non-compressed, plottable format (this requires the <i>collectl</i> switches
+-P, -F0 and -oz in addition to any other switches you choose).  If collectl
+is running on a remote machine it can either write its data to a directory 
+being shared via nfs or one can periodically pull the changing contents of
+the file(s) via a tool such as <i>rsync</i>.
+
+<p>
+<b>How to select files to plot</b>
+<br>Plot files are selected by using a combination of the <i><b>From/Thru</b></i>
+and <i><b>Filename Containing</b></i> fields.  On startup, colplot always
+examines the currently selected directory, which you can change with the
+<i><b>Change Dir</b></i> button, to make sure there at least
+one file containing plottable data.  It also makes note of the oldest and
+newest files in that directory and sets the 
+<i><b>Date</b></i> fields to these as default
+values.  If you do nothing else from a file selection perspective, plots will
+be generated for all files in this directory.  Naturally you can change the dates
+to narrow the scope of which files are selected.
+
+<P>
+The second way to narrow the scope is to enter one or more strings, separated by spaces,
+into the <i><b>Filenames Containing</b></i> field.  In addition you specify whether
+</i>any</i> of the strings must be included in a filename (the default) 
+to select it or if <i>all</i> strings must occurs to select it though this is
+typically not necessary.
+<p>
+Further, if the string contains a <i>[</i>, it is assumed
+to be in <i>pdsh</i> format.  This is a format for specifying a larger number of hostnames
+in a compressed format such as <i>xyz[1-5,10]</i>, which is the equivalent of <i>xyz1, xyz2,
+xyz3, xyz4, xyz5</i> and <i>xyz10</i>.  In this case the <i>any/all</i> field is ignored
+and any files whose hostname portions match will be selected.
+<p>
+When files are selected for plotting,
+each name will be examined to see if it matches any of the selection strings and if
+not, will <i>not</i> be selected.  You can also use an asterisk as a wild card
+character in these fields to indicate any characters can match that portion of the
+string.  Another way to think of these is as what you might specify in an <i><b>ls</b></i>
+command.
+
+<p>TIP - if you want to select a specific file or files, it is
+sometimes easier to just specify the unique portion of the hostname and the
+date in the <i>Filenames Containing</i> box rather than play with date ranges.
+If you want all the hosts for a given date just enter the date portion.
+
+<p>
+<b>How to select the time period</b>
+<br>No real surprise here.  To change the plot time period to something other 
+than a full day, simply change one or both of the time fields.
+
+<p><b>Plot Type</b>
+<br>Normally you need do nothing and you will get the default plot type, which
+more often than not is a basic <i>line</i> plot.  However you can
+choose a type to be applied to all plots from one of: 
+<i>line, point, stacked line</i> or <i>stacked point</i>.
+
+<p>
+<b>Display</b>
+<br>It can often be confusing to look at a number of plots across multiple 
+systems and dates and by default, one plot is generated across multiple dates
+if applicable.  However, if the dates are far apart (say a week or more), one
+can get an x-axis for which all the dates are run together.  It may also take a
+lot longer to gererate multi-day plots so be careful.
+<p>
+As described earlier, whether the plots contain single or multiple dates,
+a tabular display is presented much like a spreadsheet in which one or more
+variables specified by <i>Display</i> is used as the column and
+data within the column is sorted by the remaining (if any) types.  
+Use this field
+to change the default (columns organized by system and then grouped by plot). 
+If one of the types includes the string <i>Day</i> the resultant plots will
+only be for a single day.  
+
+<p><b>Summary Plots</b>
+<br>As the name states, these plots provide reports on summary data.  
+This is the type
+of data you would see when running collectl and selecting
+summary data by specifying <i>lower case</i> arguments with the -s switch.
+Keep in mind that if data wasn't collected for the plot chosen you 
+will not get any output!
+
+<p><b>Detail Plots</b>
+If the summary plots are based on <i>lower case</i> subsystems, these plots represent the data
+collected with <i>upper case</i> switches.  By default, you will see one plot for each device
+for which data was collected.  
+When producing plots for multiple systems with different 
+hardware configurations you may see a different number of detail plots.
+
+<p><b>Detail Filters</b>
+<br>Sometimes you are only interested in the details of a particular device or perhaps a subset of
+them.  If so, enter one or more strings into this field to select those devices you are
+interested in.  For example, if you were to enter <i>eth c1</i> and chose details for networks
+and disks, you might see reports for <i>eth0 eth1 eth2 c1d0 c1d1</i>.
+
+<p><b>Plots By Names</b>
+<br>There are a number of additional plots that are available to you that are simply too
+numerous, and less common, to list on the main page.  To see a complete list of these click
+on the associated <i>Help</i> button.  You may enter one or more of these and they will be
+produced in addition to those that may have been selected elsewhere.
+
+<p><b>Changing the destination of the plots</b>
+<br>In case you haven't figured it out yet, the plots are generated for display
+by gnuplot in png format, but you can also save them as a file or deliver
+them using email as a pdf attachment. 
+The following options allow you to change the way you dispose of your plot(s) 
+and in what format.
+<center>
+<table width=80%>
+<tr>
+<tr>
+  <td valign=top><b>Email or Dir</b></td>
+  <td>If this field contains an @, it is assumed to be an email 
+      address, otherwise it is assumed to be a directory name.  In
+      any event, a value in this field directs colplot to generate its output as
+      a file and either deliver it to the specified email address OR place it in
+      the specified directory.  It is recommended that before using this to first
+      generate a plot in the format you want and then fill in this field and generate
+      the plot(s) again.
+  </td>
+</tr>
+
+<tr>
+  <td valign=top><b>Subject</b></td>
+  <td>Enter a subject line you would like to see in your email or else
+  a generic one will be assigned</td>
+</tr>
+
+<tr>
+  <td valign=top><b>Type</b></td>
+  <td>By default, plots are generated in pdf format (or ghostscript on windows).
+      Using this field, you can request plots to be generated as png objects, making
+      it very easy to later include individual plots (rather than a page of plots)
+      in a document.  This field also allows you to tell colplot to not generate any
+      plots - see <i>Include Ctl File below</i>
+  <td>
+  </td>
+</tr>
+
+<tr>
+  <td valign=top><b>Include Ctl</b></td>
+  <td>For those who wish to take customization of their plots to another level,
+      checking this box will cause colplot to deliver the gnu control file 
+      to the requested destination.  
+      One can then edit that file to customize various
+      gnuplot settings not possible through the user interface.  
+      One can then manually 
+      rerun gnuplot, specifying the control file as an argument.
+  </td>
+</tr>
+
+</table>
+</center>
+
+<p><b>Changing format of the plots</b>
+<br>While there are many different options that are simply hardcoded into colplot, 
+it was decided to expose a handful of the more useful ones through the user interface.
+In most cases, you'll never need to change any of these, but it is at least worth
+mentioning what they are and what they do:
+
+<center>
+<table width=80%>
+<tr>
+  <td valign=top><b>Width</b></td>
+  <td>This controls the width of the plots as they are displayed.  By making this
+      number larger, you can make the plot significantly wider than a screeen width
+      and use the horizontal scroll bar to browse through them.  The benefit of doing
+      so is to allow you to look at the data with a finer grain without having to shrink
+      the time frame.
+  </td>
+</tr>
+
+<tr>
+  <td valign=top><b>Height</b></td>
+  <td>This field pretty much works the same as the <i>Width</i> except it controls
+      height of the plots.  It can also be very useful in getting a fine grained look at
+      data.
+  </td>
+</tr>
+
+<tr>
+  <td valign=top><b>Thick</b></td>
+  <td>Make lines or points is scatter plots bigger.  This has only been found to work
+      with gnuplot V4.2.
+  </td>
+</tr>
+
+<tr>
+  <td valign=top><b>X-Increment</b></td>
+  <td>By default, gnuplot chooses its own values for the increments on the X-Axis, which
+      most of the time are quite reasonable.  However, there are times when they are not
+      and this parameter allows you to change that and get an easier to read plot.  
+  </td>
+</tr>
+
+<tr>
+  <td valign=top><b>Legend</b></td>
+  <td>Legends take up a fair amount of plot real estate and can be removed by
+      unchecking this box.  This can be of value when one wants to line up multiple plots
+      side by side (which will automatically happen if they are narrow enough - see <i>Width</i>). 
+  </td>
+</tr>
+
+<tr>
+  <td valign=top><b>AdjustHeight</b></td>
+  <td>Sometimes the combination of the number of lines that appear in a plot and the plot height
+      can cause a second column of line definitions to appear in the column.  If you check this
+      box the height of an individual plot will be increased if necessary to fit the entire legend
+      as a single column of names.  If you do choose this option not all individial plots may be
+      the same height.  In no circumstances will a plot be shorter that the height specified in the
+      previous checkbox.
+  </td>
+</tr>
+
+<tr>
+  <td valign=top><b>PagBrk</b></td>
+  <td>This option only applies to pdf output (see <i>Type</i> below) and then only when
+      generating plots for multiple dates or multiple systems.  It will cause
+      a page break every time the date or the system name portion of the file name
+      changes, making the output easier to read.
+</tr>
+
+<tr>
+  <td valign=top><b>YLog</b></td>
+  <td>The values for the Y-Axis are generated dynamically, based on the values of
+      the data.  Sometimes a single, high valued value can make the rest of the data
+      unreadable.  Two ways to make more data readable is to plot it logrithmically
+      and to change the maximum value of the Y Axis.  This option does both at the
+      same time.
+  </td>
+</tr>
+
+<tr>
+  <td valign=top><b>X-Axis</b></td>
+  <td>Like the legend, the X-Axis labels take up vertical real estate and can also
+      be surpressed by unchecking this box.  This can be of value (though admittedly 
+      limited) when you want to fit as many plots on the screen at the same time 
+      as possible and still maximize detail.
+  </td>
+</tr>
+</table>
+</center>
+
+<p><b>Error Messages</b>
+<br>There are 2 major kinds of error messages and they will not be discussed in any detail other
+than to say some are operational, such as a user trying to select a directory with no
+plotting data in it, and some are fatal, such as not configuring the system with
+the proper path to gnuplot.
+<p>
+In any event, if something does go wrong, the user should be informed of what the
+problem is and hopefully it will be obvious enough to fix.
+
+<p><b>Command Line Interface</b>
+<br>colplot also supports a CLI that exposes all the options available though the web interface.
+For more details type <i>colplot -help</i> in a terminal window and if on a
+Linux system type you can also type <i>man colplot</i>
+for additional information.
+<p>
+<table width=100%><tr><td align=right><i>updated Feb 21, 2011</i></td></tr></colgroup></table>
+
+</body>
+</html>

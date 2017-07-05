@@ -1,0 +1,158 @@
+INSTALLATION
+
+Installation of colplot involves copying the appropriate files to the the 
+target directories and configuring the web server appropriately.  If you've
+installed the rpm on a linux system running apache, the default web server for
+many distros, the first part has already been accomplished for you and if on 
+a pc, you'll need to select an appropriate directory and copy the components 
+to it manually.
+
+If you've simply executed the INSTALL command after unpacking the tarball on a
+redhat, debian or SuSe distro, the files will also be copied into the correct
+locations.  Since things do occasionally change with newer versions of a distro,
+there is also a possibility that target directories, both for the rpm as well
+as the tarball could have changed so if this happens be sure to let me know.
+
+The configuration of the web server is what the remainder of this document focuses on.
+
+Colplot will run on both linux and windows as well as with web and command line
+interfaces.  This can complicate the installation since there are a number of
+different web servers, each of which can be configured in its own unique way.
+In fact, even if you are running one of the web servers whose installations 
+will be described below, local configurations may prevent following these 
+instructions and additional work may be required.  However, if you're running
+versions of Apache (on linux) or IIS (in windows) that have not been heavily 
+customized, these instructions should work just fine.
+
+There are two major steps after installing the RPM or moving the sources to the
+desired directory:
+- configure the web server
+- configure colplot itself
+
+PREREQUISITES
+
+See the 'Utilities' section of colplot.conf.  If you've installed your linux
+system using 'standard' locations for the web server and system utilities, most
+of the configuration work is already done for you.  On a pc the only utility
+that is required is gnuplot and it has its own special section further on.  
+If you want to generate PDF files on your PC you will also need GhostScript.  
+see http://www.cs.wisc.edu/~ghost/doc/AFPL/get851.htm.
+
+However, if you built your apache web server from source, the default locations
+will not match those in the rpm and so you'll have to change a few things
+around to get things working.  More on that later.
+
+
+CONFIGURE THE WEB SERVER
+
+These instructions will explain how to configure your webserver such that you 
+can then run colplot via the url -- http://address/colplot
+
+Apache and Apache2
+
+The assumption is you've installed colplot from the rpm in which case both /usr/bin/colplot
+and /etc/coloplot.conf will have been installed and any additional files 
+will be have placed under the /usr/share/collectl tree.  Several assumptions have been made
+about how the web server has been configured based on the distro according to the following:
+
+Distro	  Version   WebRoot  ConfFileLoc  ApacheStart
+
+RedHat	  	    /var/www/html	  /etc/httpd/conf.d		apachectl
+SuSe		    /srv/www/htdocs	  /etc/apache2/conf.d		apache2ctl
+Debian		    /var/www		  /etc/apache2/sites-available	apachectl
+		    			  /etc/apache2/sites-enabled
+
+The installation creates the directory colplot/ under the document 
+root and places 4 soft links in that directory, pointing back to the associated
+files in the /opt/hp/collectl tree.  The following shows those links on a 
+RedHat installation:
+
+	colplot-help.html -> /opt/hp/collectl/docs/colplot-help.html
+	FAQ-colgui.html -> /opt/hp/collectl/docs/FAQ-colgui.html
+	FAQ-colplot.html -> /opt/hp/collectl/docs/FAQ-colplot.html
+	index.cgi -> /opt/hp/collectl/sbin/colplot.pl
+
+if an apache webserver, the next step is to place another link in apache's conf 
+directory for config files to be included at start up.  If an apache2 webserver,
+the conf file is copied to the sites-available drectory and a soft link placed in
+the sites-enabled directory pointing back to the sites-available conf file.
+
+If you're not on one of these distros but running apache or apache2, you may need
+to perform these steps manually.
+
+The apache configuration itself consists of a single stanza enabling access to the
+colplot directory that was just created under the document root and begins with the
+following line, again on a redhat system:
+
+    <Directory "/var/www/html/colplot">
+
+On a SuSE or Debian system the directory is changed to point to a different path but
+the contents of the rest of the stanza remains the same.  So if you are manually 
+configuring your environment be sure to modify this first line accordingly.
+
+Finally restart the web server with the command "apachectl restart" or
+"apache2ctl restart" as appropriate for your installation.
+
+IIS
+
+The assumption here is that IIS has indeed been installed and started.
+
+Create a directory which will hold the colplot kit and copy the contents to it.
+
+From 'Computer Management', [what is the standard way to get here?] right click
+on "Service and Applications -> Internet Information Service -> Web Sites ->
+Default Web Site -> New -> Virtual Directory".  This will bring up the virtual
+directory creation wizard.
+
+1 - under Alias enter 'colplot'
+2 - for Directory select the directory you placed colplot into
+3 - check the box granting 'Execute' permission
+4 - stop/start the web server
+
+CONFIGURING COLPLOT
+
+Locate the colplot.conf file which should be in the same directory as colplot.
+On linux systems running apache, most settings will already be correct.
+
+There are 4 sets of parameter:
+- directories
+- utilities
+- gnuplot
+- plot defaults
+
+Directories
+
+HelpDir - This is actually prepended to '/colplot-help.html' and on a standard 
+apache webserver running on linux, there is nothing to do.  However if running
+an IIS server and you have colplot-help.html installed in the same directory as
+colplot.pl, make sure you specify "HelpDir=".
+
+PlotDir - specifies the default directory that contains plot files.  If you 
+don't have at least one such file in this directory, you will get an error 
+when you try to access colplot either from the command line OR web server.
+
+UTILITIES
+
+Since mail only works on a linux box, you only need to get GhostScript.  If
+you don't install GhostScript, colplot will still work but you won't be able
+to save any plots as PDFs.
+
+GnuPlot
+
+This is the one core utility needed to make colplot run and like the other
+utilities is a standard part of linux.  However, this is something that must
+be installed to run colplot on a PC which you can get at
+http://www.gnuplot.info/.  NOTE - on a pc you must set gnuplot's version
+number as well.
+
+Some older versions of gnuplot don't support 'png' output.  If you're
+running linux be sure the gnuplot you're running has png support built in.  
+You can easily determine if this is a problem before installing colplot by running 
+gnuplot and entering the command 'set terminal png and see if you get an error message.
+Once you're installed colplot you can simply run 'colplot -v' and you will see
+something like:
+
+colplot: V4.6.3, gnuplot: V:4.4[png,x11]
+
+which shows gnuplot is configured to support both pgn and X, the latter being required
+to run the CLI.

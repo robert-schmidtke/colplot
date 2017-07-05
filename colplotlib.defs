@@ -1,0 +1,433 @@
+# Mask values - these are actually application dependent:
+#  1 - do not let plotting package (like gnuplot) autoscale
+#      but use these values for ymin/ymax
+#  2 - if column header missing, that's ok
+#  4 - some limits (currently mem & net) are known.  this bit value
+#      says to use that for YMax for tools (such as colgui) that may wish
+#  8 - very special case, typically combined with 2.  though a detail file, do NOT print one
+#      plot for each instance but rather only print a single plot, expecting each line to be
+#      build out of headers of the form XXX:yyy[:zzz] such that only those field with the same
+#      value for yyy are being combined
+# 16 - there are some rare cases in which a plot file wasn't created by collectl and
+#      the fields for a plot doesn't exist even though the field preface does.  The best
+#      example is the [MEM] plots.  As an optimization, this mask says to check for plot
+#      specific fields to be sure valid plot.  Alternatively we could always do that check
+#      but at least for now let's optimize it.
+# 32 - for y-axis to be formated with %d
+
+# Features
+# - if ynames don't point to column header, just use that as header name
+# - everything defaults to something except ymax!  if not specified somewhere
+#   it will be set to -1
+
+# New stanza, <extmaps> if specified look like the following:
+# ext  header1|header2...
+# such that if a header exists in a plot name, look for it in file with extension 'ext'
+
+<allplots>
+cpu       { title=Cpu-Util  mask=3   yname=[CPU]User%+[CPU]Nice%,[CPU]Sys%+[CPU]Irq%+[CPU]Soft%+[CPU]Steal%,[CPU]Irq%+[CPU]Soft%+[CPU]Steal%,[CPU]Wait% clabels=User,Sys,More,Wait }
+cpuold    { title=Cpu       mask=1   yname=[CPU]User%,[CPU]Sys%,[CPU]Nice%,[CPU]Wait% }
+cpumore   { title=Cpu       mask=1   yname=[CPU]Irq%,[CPU]Soft%,[CPU]Steal% }
+cpudet    { title=Cpu-Util  mask=1   yname=[CPU:]User%+[CPU:]Nice%,[CPU:]Sys%+[CPU:]Irq%+[CPU:]Soft%+[CPU:]Steal%,[CPU:]Irq%+[CPU:]Soft%+[CPU:]Steal%,[CPU:]Wait% clabels=User,Sys,More,Wait }
+cpudold   { title=Cpu       mask=1   yname=[CPU:]User%,[CPU:]Sys%,[CPU:]Nice%,[CPU:]Wait% }
+cpumored  { title=Cpu       mask=1   yname=[CPU:]Irq%,[CPU:]Soft%,[CPU:]Steal% }
+cpu20     { title=Cpu-Util  mask=1   yname=[CPU]User%,[CPU]Sys%,[CPU]Nice%,[CPU]Wait% ymax=20 }
+cpumid    { title=Cpu-Util  mask=1   yname=[CPU]User%,[CPU]Sys%,[CPU]Nice%,[CPU]Wait% ymin=40  ymax=60 }
+cpu80     { title=Cpu-Util  mask=1   yname=[CPU]User%,[CPU]Sys%,[CPU]Nice%,[CPU]Wait% ymin=80  ymax=100 }
+ctxint    { title=Ctx-Intr  mask=2   yname=[CPU]Ctx/sec,[CPU]Intrpt/sec            }
+proc      { title=Proc      mask=2   yname=[CPU]Proc/sec,[CPU]ProcQue,[CPU]ProcRun }
+mem       { title=MemGB     mask=6   yname=[MEM]Buf,[MEM]Cached,[MEM]Slab,[MEM]Map,[MEM]Anon,[MEM]Inactive ydivisor=1048576 }
+membuf    { title=BufMB     mask=32  yname=[MEM]Buf    ydivisor=1024 }
+memcache  { title=CacheGB   mask=32  yname=[MEM]Cached ydivisor=1048576 }
+memdirty  { title=DirtyMB   mask=32  yname=[MEM]Dirty  ydivisor=1024 }
+memmap    { title=MappedMB  mask=32  yname=[MEM]Map    ydivisor=1024 }
+memanon   { title=AnonGB    mask=32  yname=[MEM]Anon   ydivisor=1048576 }
+memslab   { title=SlabGB    mask=32  yname=[MEM]Slab   ydivisor=1048576 }
+mem24     { title=Mem24GB   mask=4   yname=[MEM]Used,[MEM]Free,[MEM]Buf,[MEM]Cached             ydivisor=1048576 }
+swap      { title=SwapGB    mask=18  yname=[MEM]SwapUsed,[MEM]SwapFree,[MEM]SwapIn,[MEM]SwapOut ydivisor=1048576}
+faults    { title=Faults    mask=18  yname=[MEM]PageFaults,[MEM]PageMajFaults }
+paging    { title=PagingMB  mask=18  yname=[MEM]PageIn,[MEM]PageOut }
+sock      { title=Sockets  ymax=1000 yname=[SOCK]Tcp,[SOCK]Udp,[SOCK]Raw }
+tcp       { title=TCP	    mask=16  yname=[TCP]IpErr,[TCP]TcpErr,[TCP]UdpErr,[TCP]IcmpErr }
+tcpold    { title=TCPOLD             yname=[TCP]PureAcks,[TCP]HPAcks,[TCP]Loss,[TCP]FTrans }
+net       { title=NetMBs             yname=[NET]RxKBTot,[NET]TxKBTot }
+netpkt    { title=NetPkts            yname=[NET]RxPktTot,[NET]TxPktTot }
+netsize   { title=NetSize            yname=[NET]RxKBTot,[NET]TxKBTot,[NET]RxKBTot*1M/[NET]RxPktTot,[NET]TxKBTot*1M/[NET]TxPktTot cymax=5000 clabels=RxSize,TxSize}
+netdet    { title=Network   mask=4   yname=[NET:]RxPkt,[NET:]TxPkt,[NET:]RxKB,[NET:]TxKB }
+netdsize  { title=NetSize            yname=[NET:]RxKB,[NET:]TxKB,[NET:]RxKB*1M/[NET:]RxPkt,[NET:]TxKB*1M/[NET:]TxPkt cymax=5000 clabels=RxSize,TxSize}
+disk      { title=DiskMB             yname=[DSK]ReadKBTot,[DSK]WriteKBTot }
+diskio    { title=DiskIO             yname=[DSK]ReadTot,[DSK]WriteTot }
+disksize  ( title=DiskSize           yname=[DSK]ReadKBTot,[DSK]WriteKBTot,[DSK]ReadKBTot/[DSK]ReadTot*1K,[DSK]WriteKBTot/[DSK]WriteTot*1K cymax=500 clabels=RSizeKB,WSizeKB }
+diskdet   { title=Disk               yname=[DSK:]RKBytes,[DSK:]WKBytes,[DSK:]Reads,[DSK:]Writes }
+diskdsize ( title=DiskSize           yname=[DSK:]RKBytes,[DSK:]WKBytes,[DSK:]RKBytes/[DSK:]Reads*1K,[DSK:]WKBytes/[DSK:]Writes*1K cymax=500 clabels=RSizeKB,WSizeKB }
+inode     { title=I-Nodes            yname=[INODE]openFiles,[INODE]used }
+loadavg   { title=LoadAvg            yname=[CPU]L-Avg1,[CPU]L-Avg5,[CPU]L-Avg15 }
+nfsrpc    { title=NFS-RPC            yname=[NFS]Packets,[NFS]Calls                           ymax=5000 }
+nfssum    { title=NFS-Summary mask=2 yname=[NFS]ReadsS,[NFS]WritesS,[NFS]ReadsC,[NFS]WritesC ymax=5000 }
+nfsmeta   { title=NFS-Meta/Commits mask=18  yname=[NFS]MetaS,[NFS]CommitS,[NFS]MetaC,[NFS]CommitC   ymax=5000 }
+nfsdet    { title=NFS Detail         yname=[NFS:]Getattr,[NFS:]Setattr                       ymax=5000 }
+lusclt    { title=LusClt             yname=[CLT]ReadKB,[CLT]WriteKB }
+cltio     { title=LusClt             yname=[CLT]Reads,[CLT]Writes }
+cltmeta   { title=CltMeta  ymax=5000 yname=[CLTM]Open,[CLTM]Close,[CLTM]GAttr,[CLTM]SAttr,[CLTM]Seek,[CLTM]FSync }
+cltreada  { title=CltReadA ymax=1000 yname=[CLTR]Hits,[CLTR]Misses }
+cltdet    { title=LusClt             yname=[CLT:]ReadKB,[CLT:]WriteKB }
+cltdmeta  { title=CltMeta  ymax=5000 yname=[CLTM:]Open,[CLTM:]Close,[CLTM:]GAttr,[CLTM:]SAttr,[CLTM:]Seek,[CLTM:]Fsync }
+cltdreada { title=CltRA    ymax=1000 yname=[CLTR:]Hits,[CLTR:]Misses }
+lusoss    { title=LusOSS             yname=[OST]ReadKB,[OST]WriteKB }
+ossio     { title=LusOSS             yname=[OST]Read,[OST]Write }
+ossdet    { title=LusOSS             yname=[OST:]ReadKB,[OST:]WriteKB }
+lusmds    { title=LusMDS             yname=[MDS]Close,[MDS]Getattr,[MDS]Reint,[MDS]Sync }
+ib        { title=IB                 yname=[IB]InKB,[IB]OutKB       ymax=1000 ydivisor=1024 }
+ibio      { title=IB                 yname=[IB]InPkt,[IB]OutPkt     ymax=2500 ydivisor=1000 }
+ibsize    { title=IBSize             yname=[IB]InKB,[IB]OutKB,[IB]InKB*1M/[IB]InPkt,[IB]OutKB*1M/[IB]OutPkt clabels=RxSizeKB,TxSizeKB cymax=2000 }
+elan      { title=ELAN               yname=[ELAN]InKB,[ELAN]OutKB   ymax=1000 ydivisor=1024 }
+elanio    { title=ELAN               yname=[ELAN]InPkt,[ELAN]OutPkt ymax=2500 ydivisor=1000 }
+ibdet     { title=IB                 yname=[IB:]InKB,[IB:]OutKB }
+ibdsize   { title=IBSize             yname=[IB:]InKB,[IB:]OutKB,[IB:]InKB*1M/[IB:]InPkt,[IB:]OutKB*1M/[IB:]OutPkt clabels=RxSizeKB,TxSizeKB cymax=2000 }
+ibdio     { title=IB                 yname=[IB:]InPkt,[IB:]OutPkt }
+elandmb   { title=Elan               yname=[ELAN:]GetKB,[ELAN:]PutKB,[ELAN:]CompKB }
+elandio   { title=Elan               yname=[ELAN:]Get,[ELAN:]Put,[ELAN:]Comp }
+fans      { title=FanSpeed  mask=2   yname=[ENV:]Speed }
+temps     { title=Temp      mask=2   yname=[ENV:]Temp }
+power     { title=Power     mask=2   yname=[ENV:]Watts }
+nvidia    { title=nvidia             yname=[NVIDIA]Temp,[NVIDIA]Fan,[NVIDIA]Gpu,[NVIDIA]Mem }
+misc1     { title=MiscCtrs           yname=[MISC]Mounts,[MISC]Logins,[MISC]Uptime ymax=10,10,500 }
+misc2     { title=CPU-Frequency mask=16 yname=[MISC]CPUFreq }
+disktimes { title=DiskTimes          yname=[DSK:]Wait,[DSK:]SvcTim }
+diskque   { title=DiskQueue          yname=[DSK:]QueLen }
+diskutil  { title=DiskUtil           yname=[DSK:]Util }
+
+#  These are only here to support data collected with versions of collectl prior to 3.2
+nfsV2c    { title=NFS-V2c            yname=[NFS2C]Reads,[NFS2C]Writes                        ymax=5000 }
+nfsV2s    { title=NFS-V2s            yname=[NFS2S]Reads,[NFS2S]Writes                        ymax=5000 }
+nfsV3c    { title=NFS-V3c            yname=[NFS3C]Reads,[NFS3C]Writes                        ymax=5000 }
+nfsV3s    { title=NFS-V3s            yname=[NFS3S]Reads,[NFS3S]Writes                        ymax=5000 }
+nfsV4c    { title=NFS-V4c            yname=[NFS4C]Reads,[NFS4C]Writes                        ymax=5000 }
+nfsV4s    { title=NFS-V4s            yname=[NFS4S]Reads,[NFS4S]Writes                        ymax=5000 }
+nfsV2cd   { title=NFS-V2cd           yname=[NFS2CD]Getattr,[NFS2CD]Setattr                   ymax=5000 }
+nfsV2sd   { title=NFS-V2sd           yname=[NFS2SD]Getattr,[NFS2SD]Setattr                   ymax=5000 }
+nfsV3cd   { title=NFS-V3cd           yname=[NFS3CD]Getattr,[NFS3CD]Setattr,[NFS3CD]Commit    ymax=5000 }
+nfsV3sd   { title=NFS-V3sd           yname=[NFS3SD]Getattr,[NFS3SD]Setattr,[NFS3SD]Commit    ymax=5000 }
+nfsV4cd   { title=NFS-V4cd           yname=[NFS4CD]Getattr,[NFS4CD]Setattr,[NFS4CD]Commit    ymax=5000 }
+nfsV4sd   { title=NFS-V4sd           yname=[NFS4SD]Getattr,[NFS4SD]Setattr,[NFS4SD]Commit    ymax=5000 }
+
+# These are for stats collected via --import statsd and generated with swift-statstee
+# Account Server Stats
+accaudt  {title=AccAuditor      yname=[SW-ACCAUDT]Errs,[SW-ACCAUDT]Pass,[SW-ACCAUDT]Fail }
+accreap  {title=AccReaper       yname=[SW-ACCREAP]Errs,[SW-ACCREAP]CFail,[SW-ACCREAP]CDel,[SW-ACCREAP]CRem,[SW-ACCREAP]CPoss,[SW-ACCREAP]OFail,[SW-ACCREAP]ODel [SW-ACCREAP]ORem [SW-ACCREAP]OPoss }
+accrepl  {title=AccRepl         yname=[SW-ACCREPL]Diff,[SW-ACCREPL]Diff,[SW-ACCREPL]DCap,[SW-ACCREPL]Nochg,[SW-ACCREPL]Hasm,[SW-ACCREPL]Rsync,[SW-ACCREPL]RMerg [SW-ACCREPL]Atmpt [SW-ACCREPL]Fail [SW-ACCREPL]Remov [SW-ACCREPL]Succ }
+accsrvr  {title=AccServer       yname=[SW-ACCSRVR]Put,[SW-ACCSRVR]Get,[SW-ACCSRVR]Post,[SW-ACCSRVR]Dele,[SW-ACCSRVR]Head,[SW-ACCSRVR]Repl,[SW-ACCSRVR]Errs }
+
+# Container Server Stats
+conaudt  {title=ConAuditor      yname=[SW-CONAUDT]Errs,[SW-CONAUDT]Pass,[SW-CONAUDT]Fail }
+conrepl  {title=ConRepl         yname=[SW-CONREPL]Diff,[SW-CONREPL]DCap,[SW-CONREPL]Nochg,[SW-CONREPL]Hasm,[SW-CONREPL]Rsync,[SW-CONREPL]RMerg,[SW-CONREPL]Atmpt,[SW-CONREPL]Fail,[SW-CONREPL]Remov,[SW-CONREPL]Succ }
+consrvr  {title=ConServer       yname=[SW-CONSRVR]Put,[SW-CONSRVR]Get,[SW-CONSRVR]Dele,[SW-CONSRVR]Head,[SW-CONSRVR]Repl,[SW-CONSRVR]Errs,[SW-CONSRVR]Post }
+consync  {title=ConSync         yname=[SW-CONSYNC]Skip,[SW-CONSYNC]Fail,[SW-CONSYNC]Sync,[SW-CONSYNC]Dele,[SW-CONSYNC]Put }
+conupdt  {title=ConUpdater      yname=[SW-CONUPDT]Succ,[SW-CONUPDT]Fail,[SW-CONUPDT]NChg }
+
+# Object Server Stats
+objaudt  {title=ObjAuditor      yname=[SW-OBJAUDT]Quar,[SW-OBJAUDT]Errs }
+objexpr  {title=ObjExpirer      yname=[SW-OBJEXPR]Obj,[SW-OBJEXPR]Errs }
+objptime {title=ObjPTime        yname=[SW-OBJSRVR]PutTime*1000 clabels=msec }
+objsrvr  {title=ObjServerOps    yname=[SW-OBJSRVR]Put,[SW-OBJSRVR]Get,[SW-OBJSRVR]Dele,[SW-OBJSRVR]Post,[SW-OBJSRVR]Head }
+objsrv2  {title=ObjServerOps2   yname=[SW-OBJSRVR]Repl,[SW-OBJSRVR]Errs,[SW-OBJSRVR]Quar,[SW-OBJSRVR]Asyn }
+objrepl  {title=ObjRepl         yname=[SW-OBJREPL]PDel,[SW-OBJREPL]PUpd,[SW-OBJREPL]SHash,[SW-OBJREPL]SSync }
+objupdt  {title=ObjUpdater      yname=[SW-OBJUPDT]Quar,[SW-OBJUPDT]Succ,[SW-OBJUPDT]Fail,[SW-OBJUPDT]ULink }
+
+# Proxy Stats
+prxyacc  {title=ProxyAcc        yname=[SW-PRXYACC]Put,[SW-PRXYACC]Get,[SW-PRXYACC]Post,[SW-PRXYACC]Dele,[SW-PRXYACC]Head,[SW-PRXYACC]Copy,[SW-PRXYACC]Opts,[SW-PRXYACC]BadM,[SW-PRXYACC]Errs,[SW-PRXYACC]HCnt,[SW-PRXYACC]HACnt,[SW-PRXYACC]TOut,[SW-PRXYACC]DConn }
+prxycon  {title=ProxyCon        yname=[SW-PRXYCON]Put,[SW-PRXYCON]Get,[SW-PRXYCON]Post,[SW-PRXYCON]Dele,[SW-PRXYCON]Head,[SW-PRXYCON]Copy,[SW-PRXYCON]Opts,[SW-PRXYCON]BadM,[SW-PRXYCON]Errs,[SW-PRXYCON]HCnt,[SW-PRXYCON]HACnt,[SW-PRXYCON]TOut,[SW-PRXYCON]DConn }
+prxysvr  {title=ProxyServer     yname=[SW-PRXYOBJ]Put,[SW-PRXYOBJ]Get,[SW-PRXYOBJ]Post,[SW-PRXYOBJ]Dele,[SW-PRXYOBJ]Head,[SW-PRXYOBJ]Copy,[SW-PRXYOBJ]Opts,[SW-PRXYOBJ]BadM,[SW-PRXYOBJ]Errs,[SW-PRXYOBJ]HCnt,[SW-PRXYOBJ]HACnt,[SW-PRXYOBJ]TOut,[SW-PRXYOBJ]DConn }
+
+# These are really intended more for use in macros, but they can certainly be used separately
+# Also notice we're not bothering to define any headers below so the column names will be used in plots.
+# Lustre Clients
+cltbrwR1   { title=CltBrw  ymax=100   yname=[CLTB]r1P,[CLTB]r2P,[CLTB]r4P,[CLTB]r8P,[CLTB]r16P,[CLTB]r32P }
+cltbrwR2   { title=CltBrw  ymax=100   yname=[CLTB]r64P,[CLTB]r128P,[CLTB]r256P }
+cltbrwW1   { title=CltBrw  ymax=100   yname=[CLTB]w1P,[CLTB]w2P,[CLTB]w4P,[CLTB]w8P,[CLTB]w16P,[CLTB]w32P }
+cltbrwW2   { title=CltBrw  ymax=100   yname=[CLTB]w64P,[CLTB]w128P,[CLTB]w256P }
+cltbrwDR1  { title=CltBrw  ymax=100   yname=[CLTB:]r1P,[CLTB:]r2P,[CLTB:]r4P,[CLTB:]r8P,[CLTB:]r16P,[CLTB:]r32P }
+cltbrwDR2  { title=CltBrw  ymax=100   yname=[CLTB:]r64P,[CLTB:]r128P,[CLTB:]r256P }
+cltbrwDW1  { title=CltBrw  ymax=100   yname=[CLTB:]w1P,[CLTB:]w2P,[CLTB:]w4P,[CLTB:]w8P,[CLTB:]w16P,[CLTB:]w32P }
+cltbrwDW2  { title=CltBrw  ymax=100   yname=[CLTB:]w64P,[CLTB:]w128P,[CLTB:]w256P }
+
+# Lustre OSSs
+ossbrwR1   { title=OssBrw  ymax=100   yname=[OSTB]r1P,[OSTB]r2P,[OSTB]r4P,[OSTB]r8P,[OSTB]r16P }
+ossbrwR2   { title=OssBrw  ymax=100   yname=[OSTB]r32P,[OSTB]r64P,[OSTB]r128P,[OSTB]r256P }
+ossbrwW1   { title=OssBrw  ymax=100   yname=[OSTB]w1P,[OSTB]w2P,[OSTB]w4P,[OSTB]w8P,[OSTB]w16P }
+ossbrwW2   { title=OssBrw  ymax=100   yname=[OSTB]w32P,[OSTB]w64P,[OSTB]w128P,[OSTB]w256P }
+ossbrwDR1  { title=OstBrw  ymax=100   yname=[OSTB:]r1,[OSTB:]r2,[OSTB:]r4,[OSTB:]r8,[OSTB:]r16 }
+ossbrwDR2  { title=OstBrw  ymax=100   yname=[OSTB:]r32,[OSTB:]r64,[OSTB:]r128,[OSTB:]r256 }
+ossbrwDW1  { title=OstBrw  ymax=100   yname=[OSTB:]w1,[OSTB:]w2,[OSTB:]w4,[OSTB:]w8,[OSTB:]w16 }
+ossbrwDW2  { title=OstBrw  ymax=100   yname=[OSTB:]w32,[OSTB:]w64,[OSTB:]w128,[OSTB:]w256 }
+
+# Lustre disk stats - these apply to ALL lustre servers
+lusblksum  { title=LusDsk  ymax=100   yname=[OSTD]Rds,[OSTD]Rdk,[OSTD]Wrts,[OSTD]Wrtk }
+lusblkR1   { title=LusDsk  ymax=100   yname=[OSTD]r0.5K,[OSTD]r1K,[OSTD]r2K,[OSTD]r4K,[OSTD]r8K,[OSTD]r16K,[OSTD]r32K }
+lusblkR2   { title=LusDsk  ymax=100   yname=[OSTD]r63K,[OSTD]r64K,[OSTD]r65K,[OSTD]r80K,[OSTD]r96K,[OSTD]r112K }
+lusblkR3   { title=LusDsk  ymax=100   yname=[OSTD]r124K,[OSTD]r128K,[OSTD]r129K,[OSTD]r144K,[OSTD]r252K,[OSTD]r255K,[OSTD]r256K,[OSTD]r257K }
+lusblkR4   { title=LusDsk  ymax=100   yname=[OSTD]r512K,[OSTD]r1024K,[OSTD]r2048K }
+lusblkW1   { title=LusDsk  ymax=100   yname=[OSTD]w0.5K,[OSTD]w1K,[OSTD]w2K,[OSTD]w4K,[OSTD]w8K,[OSTD]w16K,[OSTD]w32K }
+lusblkW2   { title=LusDsk  ymax=100   yname=[OSTD]w63K,[OSTD]w64K,[OSTD]w65K,[OSTD]w80K,[OSTD]w96K,[OSTD]w112K }
+lusblkW3   { title=LusDsk  ymax=100   yname=[OSTD]w124K,[OSTD]w128K,[OSTD]w129K,[OSTD]w144K,[OSTD]w252K,[OSTD]w255K,[OSTD]w256K,[OSTD]w257K }
+lusblkW4   { title=LusDsk  ymax=100   yname=[OSTD]w512K,[OSTD]w1024K,[OSTD]w2048K }
+lusblkDsum { title=LusDsk  ymax=100   yname=[OSTD:]rds,[OSTD:]rdkb,[OSTD:]wrs,[OSTD:]wrkb }
+lusblkDR1  { title=LusDsk  ymax=100   yname=[OSTD:]r1K,[OSTD:]r2K,[OSTD:]r4K,[OSTD:]r8K,[OSTD:]r16K,[OSTD:]r32K }
+lusblkDR2  { title=LusDsk  ymax=100   yname=[OSTD:]r63K,[OSTD:]r64K,[OSTD:]r65K,[OSTD:]r80K,[OSTD:]r96K,[OSTD:]r112K }
+lusblkDR3  { title=LusDsk  ymax=100   yname=[OSTD:]r124K,[OSTD:]r128K,[OSTD:]r129K,[OSTD:]r144K,[OSTD:]r252K,[OSTD:]r255K,[OSTD:]r256K,[OSTD:]r257K }
+lusblkDR4  { title=LusDsk  ymax=100   yname=[OSTD:]r512K,[OSTD:]r1024K,[OSTD:]r2048K }
+lusblkDW1  { title=LusDsk  ymax=100   yname=[OSTD:]w1K,[OSTD:]w2K,[OSTD:]w4K,[OSTD:]w8K,[OSTD:]w16K,[OSTD:]w32K }
+lusblkDW2  { title=LusDsk  ymax=100   yname=[OSTD:]w63K,[OSTD:]w64K,[OSTD:]w65K,[OSTD:]w80K,[OSTD:]w96K,[OSTD:]w112K }
+lusblkDW3  { title=LusDsk  ymax=100   yname=[OSTD:]w124K,[OSTD:]w128K,[OSTD:]w129K,[OSTD:]w144K,[OSTD:]w252K,[OSTD:]w255K,[OSTD:]w256K,[OSTD:]w257K }
+lusblkDW4  { title=LusDsk  ymax=100   yname=[OSTD:]w512K,[OSTD:]w1024K,[OSTD:]w2048K }
+
+<allheaders>
+[CPU]User%       { ylabel=User     ymax=100 }
+[CPU]Sys%        { ylabel=Sys      ymax=100 }
+[CPU]Nice%       { ylabel=Nice     ymax=100 }
+[CPU]Wait%       { ylabel=Wait     ymax=100 }
+[CPU]Irq%        { ylabel=Irq      ymax=100 }
+[CPU]Soft%       { ylabel=Soft     ymax=100 }
+[CPU]Steal%      { ylabel=Steal    ymax=100 }
+[CPU]Ctx/sec     { ylabel=Ctx      ymax=50    ydivisor=1000 }
+[CPU]Intrpt/sec  { ylabel=Intr     ymax=50    ydivisor=1000 }
+[CPU]Proc/sec    { ylabel=PerSec   ymax=100 }
+[CPU]ProcQue     { ylabel=Queued   ymax=100 }
+[CPU]ProcRun     { ylabel=Run      ymax=100 }
+[MEM]Buf         { ylabel=Buff     ymax=4000  }
+[MEM]Cached      { ylabel=Cached   ymax=4000  }
+[MEM]Slab        { ylabel=Slab     ymax=4000  }
+[MEM]Map         { ylabel=Map      ymax=4000  }
+[MEM]Anon        { ylabel=Anon     ymax=4000  }
+[MEM]Inactive    { ylabel=Inact    ymax=4000  }
+[MEM]Used        { ylabel=Used     ymax=4000  }
+[MEM]Free        { ylabel=Free     ymax=4000  }
+[MEM]SwapUsed    { ylabel=SUsed    ymax=4000  }
+[MEM]SwapFree    { ylabel=SFree    ymax=4000  }
+[MEM]SwapIn      { ylabel=SwapIn   ymax=100 }
+[MEM]SwapOut     { ylabel=SwapOt   ymax=100 }
+[MEM]PageFaults    { ylabel=Faults(K)  ymax=500000 ydivisor=1000 }
+[MEM]PageMajFaults { ylabel=MajFlt     ymax=1000                 }
+[MEM]PageIn        { ylabel=PageIn(K)  ydivisor=1024 }
+[MEM]PageOut       { ylabel=PageOut    ydivisor=1024 }
+[TCP]PureAcks    { ylabel=PureAcks ymax=1000 }
+[TCP]HPAcks      { ylabel=HPAcks   ymax=1000 }
+[TCP]Loss        { ylabel=Loss     ymax=100  }
+[TCP]FTrans      { ylabel=FTrans   ymax=100  }
+[INODE]openFiles { ylabel=Open     ymax=100  }
+[INODE]used      { ylabel=Used     ymax=100  }
+[NET]RxKBTot     { ylabel=InMB     ymax=120  ydivisor=1024 }
+[NET]TxKBTot     { ylabel=OutMB    ymax=120  ydivisor=1024 }
+[NET]RxPktTot    { ylabel=InPkts   ymax=1000 ydivisor=1000 }
+[NET]TxPktTot    { ylabel=OutPkts  ymax=1000 ydivisor=1000 }
+[DSK]ReadKBTot   { ylabel=ReadMB   ymax=75   ydivisor=1024 }
+[DSK]WriteKBTot  { ylabel=WriteMB  ymax=75   ydivisor=1024 }
+[DSK]ReadTot     { ylabel=Reads    ymax=1000 }
+[DSK]WriteTot    { ylabel=Writes   ymax=1000 }
+[CLT]ReadKB      { ylabel=ReadMB   ymax=400  ydivisor=1024 }
+[CLT]WriteKB     { ylabel=WriteMB  ymax=400  ydivisor=1024}
+[CLT]Reads       { ylabel=Reads    ymax=400 }
+[CLT]Writes      { ylabel=Writes   ymax=400 }
+[OST]ReadKB      { ylabel=ReadMB   ymax=100  ydivisor=1024 }
+[OST]WriteKB     { ylabel=WriteMB  ymax=100  ydivisor=1024 }
+[OST]Read        { ylabel=Reads    ymax=100 }
+[OST]Write       { ylabel=Writes   ymax=100 }
+[ELAN]InKB       { ylabel=InMB     ymax=1000 ydivisor=1024 }
+[ELAN]OutKB      { ylabel=OutMB    ymax=1000 ydivisor=1024 }
+[IB]InKB         { ylabel=InMB     ymax=1000 ydivisor=1024 }
+[IB]OutKB        { ylabel=OutMB    ymax=1000 ydivisor=1024 }
+[INT]InKB        { ylabel=InMB     ymax=1000 ydivisor=1024 }
+[INT]OutKB       { ylabel=OutMB    ymax=1000 ydivisor=1024 }
+[INT]InPkt       { ylabel=InPkts   ymax=1000 ydivisor=1000 }
+[INT]OutPkt      { ylabel=OutPkts  ymax=1000 ydivisor=1000 }
+[CPU:]User%      { ylabel=User     ymax=100  }
+[CPU:]Sys%       { ylabel=Sys      ymax=100  }
+[CPU:]Nice%      { ylabel=Nice     ymax=100  }
+[CPU:]Wait%      { ylabel=Wait     ymax=100  }
+[CPU:]Irq%       { ylabel=Irq      ymax=100 }
+[CPU:]Soft%      { ylabel=Soft     ymax=100 }
+[CPU:]Steal%     { ylabel=Steal    ymax=100 }
+[CPU:]Intrpt     { ylabel=Intrpt   ymax=25000 }
+[DSK:]Reads      { ylabel=Reads    ymax=1000  }
+[DSK:]Writes     { ylabel=Writes   ymax=1000  }
+[DSK:]RMerge     { ylabel=RMerge   ymax=1000  }
+[DSK:]WMerge     { ylabel=WMerge   ymax=1000  }
+[DSK:]RKBytes    { ylabel=ReadMB   ymax=75    ydivisor=1024 }
+[DSK:]WKBytes    { ylabel=WriteMB  ymax=75    ydivisor=1024 }
+[DSK:]Request    { ylabel=Rqst     ymax=250                 }
+[DSK:]QueLen     { ylabel=QLen     ymax=250                 }
+[DSK:]Wait       { ylabel=Wait     ymax=500                 }
+[DSK:]SvcTim     { ylabel=SvcTim   ymax=1024                }
+[DSK:]Util       { ylabel=Util     ymax=250                 }
+[NET:]RxPkt      { ylabel=InPkt    ymax=1000  ydivisor=1000 }
+[NET:]TxPkt      { ylabel=OutPkt   ymax=1000  ydivisor=1000 }
+[NET:]RxKB       { ylabel=InMB     ymax=120   ydivisor=1024 }
+[NET:]TxKB       { ylabel=OutMB    ymax=120   ydivisor=1024 }
+[IB:]InPkt       { ylabel=InPkt    ymax=2500  ydivisor=1000 }
+[IB:]OutPkt      { ylabel=OutPkt   ymax=2500  ydivisor=1000 }
+[IB:]InKB        { ylabel=InMB     ymax=1000  ydivisor=1024 }
+[IB:]OutKB       { ylabel=OutMB    ymax=1000  ydivisor=1024 }
+[ELAN:]InPkt     { ylabel=InPkt    ymax=2500  ydivisor=1000 }
+[ELAN:]OutPkt    { ylabel=OutPkt   ymax=2500  ydivisor=1000 }
+[ELAN:]GetKB     { ylabel=GetMB    ymax=1000  ydivisor=1024 }
+[ELAN:]PutKB     { ylabel=PutMB    ymax=1000  ydivisor=1024 }
+[ELAN:]CompKB    { ylabel=CompMB   ymax=1000  ydivisor=1024 }
+[CLT:]ReadKB     { ylabel=ReadMB   ymax=1000  ydivisor=1024 }
+[CLT:]WriteKB    { ylabel=WriteMB  ymax=1000  ydivisor=1024 }
+[CLTR:]Hits      { ylabel=Hits     ymax=1000  ydivisor=1024 }
+[OST:]ReadKB     { ylabel=ReadMB   ymax=1000  ydivisor=1024 }
+[OST:]WriteKB    { ylabel=WriteMB  ymax=1000  ydivisor=1024 }
+[ENV:]Temp       { ylabel=Temp }
+[ENV:]Speed      { ylabel=Speed }
+[ENV:]Watts      { ylabel=Watts }
+
+<macros>
+# NOTE - macros must be defined before they are referenced by another one
+# summary, only doing swift object-server
+sumlus     lusclt,lusmds,lusoss
+sumnfs     nfssum nfsmeta nfsV2c nfsV2s nfsV3c nfsV3s nfsV4c nfsV4s
+inter      ib,elan
+sumall     cpu,disk,mem,net,sock,proc,ctxint,tcp,inode,sumnfs,inter,sumlus,faults,paging,swap,loadavg,objsrvr
+summin     cpu,disk,mem,net
+misc       misc1,misc2
+
+# swift macros
+swacc  accaudt,accreap,accrepl,accsrvr
+swcon  conaudt,conrepl,consrvr,consync,conupdt
+swobj  objaudt,objexpr,objptime,objsrvr,objsrv2,objrepl,objupdt
+swprxy prxyacc,prxycon,prxysvr
+swift  swacc,swcon,swobj,swprxy
+
+
+# details
+detlus     lusclt,lusmds,lusoss
+detnfs     nfsdet nfsV2cd nfsV2sd nfsV3cd nfsV3sd nfsV4cd nfsV4sd
+interdet   ibdet,elandmb,elandio
+detall     cpudet,diskdet,netdet,detnfs,interdet,detlus,fans,temps,power
+cltbrw     cltbrwR1 cltbrwR2 cltbrwW1 cltbrwW2
+cltbrwD    cltbrwDR1 cltbrwDR2 cltbrwDW1 cltbrwDW2
+ossbrw     ossbrwR1 ossbrwR2 ossbrwW1 ossbrwW2
+ossbrwD    ossbrwDR1 ossbrwDR2 ossbrwDW1 ossbrwDW2
+lusblkR    lusblkR1 lusblkR2 lusblkR3 lusblkR4
+lusblkW    lusblkW1 lusblkW2 lusblkW3 lusblkW4
+lusblkDR   lusblkDR1 lusblkDR2 lusblkDR3 lusblkDR4
+lusblkDW   lusblkDW1 lusblkDW2 lusblkDW3 lusblkDW4
+
+<descplots>
+cpu         { cat=cpu     type=s            desc=Cpu Utilization. Other=IRQ+SOFT+STEAL    }
+cpuold      { cat=cpu     type=s            desc=Old format ony reports individual fields }
+cpumore     { cat=cpu     type=s            desc=Additional types of use                  }
+cpudet      { cat=cpu     type=d            desc=Cpu Details, Other=IRQ+SOFT+STEAL        }
+cpudold     { cat=cpu     type=s            desc=Old format ony reports individual fields }
+cpumored    { cat=cpu     type=d            desc=Additional types of use          }
+cpu20       { cat=cpu     type=s            desc=Cpu Utilization, 0-20%           }
+cpumid      { cat=cpu     type=s            desc=Cpu Utilization, 40-60%          }
+cpu80       { cat=cpu     type=s            desc=Cpu Utilization, 80-100%         }
+cpuint      { cat=cpu     type=d            desc=Interrupts by Cpu                }
+loadavg     { cat=cpu     type=s            desc=Load Averages for 1,5,15 min     }
+ctxint      { cat=proc    type=s            desc=Context and Interruputs          }
+proc        { cat=proc    type=s            desc=Processes                        }
+mem         { cat=mem     type=s            desc=Memory                           }
+membuf      { cat=mem     type=s            desc=Buffered Memory                  }
+memcache    { cat=mem     type=s            desc=Cached Memory                    }
+memdirty    { cat=mem     type=s            desc=Dirty Memory                     }
+memmap      { cat=mem     type=s            desc=Mapped Memory                    }
+memanon     { cat=mem     type=s            desc=Anon Memory                      }
+memslab     { cat=mem     type=s            desc=Slab Memory                      }
+swap        { cat=mem     type=s            desc=Swap Utilization                 }
+faults      { cat=mem     type=s            desc=Page Faults                      }
+paging      { cat=mem     type=s            desc=Paging                           }
+sock        { cat=sock    type=s            desc=Socket Usage                     }
+accaudt     { cat=swift   type=s            desc=Account Auditor                  }
+accreap     { cat=swift   type=s            desc=Account Reaper                   }
+accrepl     { cat=swift   type=s            desc=Account Replicator               }
+accsrvr     { cat=swift   type=s            desc=Account Server                   }
+conaudt     { cat=swift   type=s            desc=Container Auditor                }
+conrepl     { cat=swift   type=s            desc=Container Replicator             }
+consrvr     { cat=swift   type=s            desc=Container Server                 }
+consync     { cat=swift   type=s            desc=Container Sync                   }
+conupdt     { cat=swift   type=s            desc=Container Updater                }
+objaudt     { cat=swift   type=s            desc=Object Auditor                   }
+objexpr     { cat=swift   type=s            desc=Object Expirer                   }
+objptime    { cat=swift   type=s            desc=Times for first PUT              ]
+objsrvr     { cat=swift   type=s            desc=Object Server                    }
+objsrv2     { cat=swift   type=s            desc=Object Server2                   }
+objrepl     { cat=swift   type=s            desc=Object Replicator                }
+objupdt     { cat=swift   type=s            desc=Object Updater                   }
+prxyacc     { cat=swift   type=s            desc=Proxy Account                    }
+prxycon     { cat=swift   type=s            desc=Proxy Container                  }
+prxyobj     { cat=swift   type=s            desc=Proxy Object                     }
+tcp         { cat=tcp     type=s            desc=TCP errors count summary         }
+tcpold      { cat=tcp     type=s            desc=old TCP acks & packet failures   }
+net         { cat=net     type=s            desc=Network Summary                  }
+netpkt      { cat=net     type=s            desc=Network packets                  }
+netsize     { cat=net     type=s            desc=Bandwidth and transfer sizes     }
+nvidia      { cat=import  type=s            desc=nvidia GPU stats                 }
+netdet      { cat=net     type=d            desc=Network Details                  }
+netdsize    { cat=net     type=d            desc=Network Packet Size Details      }
+disk        { cat=disk    type=s            desc=Disk Summary                     }
+diskio      { cat=disk    type=s            desc=Disk I/O                         }
+disksize    { cat=disk    type=s            desc=Bandwidth and transfer sizes     }
+diskdet     { cat=disk    type=d            desc=Disk Details                     }
+diskdsize   { cat=disk    type=d            desc=Disk I/O Size Details            }
+disktimes   { cat=disk    type=d            desc=Disk wait/service times          }
+diskque     { cat=disk    type=d            desc=Disk request queue depth         }
+diskutil    { cat=disk    type=d            desc=Disk utilization                 }
+fans        { cat=env     type=d            desc=Fan Speeds                       }
+temps       { cat=env     type=d            desc=Temperature Sensors              }
+power       { cat=env     type=d            desc=Power Sensor                     }
+inode       { cat=inode   type=s            desc=Inode  Summary                   }
+nfsrpc      { cat=nfs     type=s            desc=NFS RPC Summary                  }
+nfssum      { cat=nfs     type=s            desc NFS Aggregate Summary Data       }
+nfsmeta     { cat=nfs     type=s            desc NFS Metadata and Commits         }
+nfsV2c      { cat=nfs     type=s            desc=older NFS V2 Client Summary      }
+nfsV2s      { cat=nfs     type=s            desc=older NFS V2 Server Summary      }
+nfsV3c      { cat=nfs     type=s            desc=older NFS V3 Client Summary      }
+nfsV3s      { cat=nfs     type=s            desc=older NFS V3 Server Summary      }
+nfsV4c      { cat=nfs     type=s            desc=older NFS V4 Client Summary      }
+nfsV4s      { cat=nfs     type=s            desc=older NFS V4 Server Summary      }
+nfsV2cd     { cat=nfs     type=d            desc=NFS Version 2 Client Detail      }
+nfsV2sd     { cat=nfs     type=d            desc=NFS Version 2 Server Detail      }
+nfsV3cd     { cat=nfs     type=d            desc=NFS Version 3 Client Detail      }
+nfsV3sd     { cat=nfs     type=d            desc=NFS Version 3 Server Detail      }
+nfsV4cd     { cat=nfs     type=d            desc=NFS Version 4 Client Detail      }
+nfsV4sd     { cat=nfs     type=d            desc=NFS Version 4 Server Detail      }
+luscltio    { cat=lustre  type=s  mod=clt   desc=Lustre Client Summary, I/O only  }
+cltmeta     { cat=lustre  type=s  mod=cltM  desc=Lustre Client Meta Summary       }
+cltreada    { cat=lustre  type=s  mod=cltRA desc=Lustre Client Read-Ahead Summary }
+cltdet      { cat=lustre  type=d  mod=clt   desc=Lustre Client FS I/O Detail      }
+cltdetL     { cat=lustre  type=d  mod=cltL  desc=Lustre Client OST I/O Detail     }
+lusmds      { cat=lustre  type=s  mod=mds   desc=lustre Lustre MDS Summary        }
+lusoss      { cat=lustre  type=s  mod=oss   desc=Lustre OSS Data Rates            }
+ossio       { cat=lustre  type=s  mod=oss   desc=Lustre OSS I/Os                  }
+ossdet      { cat=lustre  type=d  mod=oss   desc=Lustre OSS Detail                }
+ib          { cat=ib      type=s            desc=Infiniband Bandwidth             }
+ibio        { cat=ib      type=s            desc=Infiniband Packet Rates          }
+ibsize      { cat=ib      type=s            desc=Bandwidth and transfer sizes     }
+elan        { cat=elan    type=s            desc=Quadrics ELAN Bandwidth          }
+elanio      { cat=elan    type=s            desc=Quadrics ELAN Packet Rates       }
+ibdet       { cat=inter   type=d  mod=IB    desc=IB interconnect detail data      }
+ibdsize     { cat=inter   type=d  mod=IB    desc=IB packet size detail            }
+elandmb     { cat=inter   type=d  mod=elan  desc=Elan interconnect MBs (get/put/comp) }
+elandio     { cat=inter   type=d  mod=elan  desc=Elan interconnect IOs (get/put/comp) }
+misc1       { cat=misc    type=s            desc=Miscellaneous ctrs from '--import misc' }
+misc2       { cat=misc    type=s            desc=CPU Frequency from '--import misc'      }
+
+sumall      { cat=macro   type=m  desc=All summary plots, except nfs client/server stats }
+sumlus      { cat=macro   type=m  desc=Lustre summary plots for clients, mds and oss }
+summin      { cat=macro   type=m  desc=Minimal set of summary plots (cpu, disk, mem and disk }
+sumnfs      { cat=macro   type=m  desc=NFS summary plots, colplot only }
+detall      { cat=macro   type=m  desc=All detail plots except nfs and lustre }
+detlus      { cat=macro   type=m  desc=Lustre detail plots (there can be a LOT of these!) }
+detnfs      { cat=macro   type=m  desc=NFS detail plots, colplot only }
+inter       { cat=macro   type=m  desc=Interconnect summary plots }
+interdet    { cat=macro   type=m  desc=Interconnect detail plots }
+cltbrw      { cat=macro   type=m  desc=Lustre Client BRW stats }
+cltbrwD     { cat=macro   type=m  desc=Lustre Client BRW detail stats }
+ossbrw      { cat=macro   type=m  desc=Lustre OSS BRW stats }
+ossbrwD     { cat=macro   type=m  desc=Lustre OSS BRW detail stats }
+lusblkR     { cat=macro   type=m  desc=Lustre Block I/O read summary stats }
+lusblkW     { cat=macro   type=m  desc=Lustre Block I/O write summary stats }
+lusblkDR    { cat=macro   type=m  desc=Lustre Block I/O read detail stats  (there can be LOTS of these!) }
+lusblkDW    { cat=macro   type=m  desc=Lustre Block I/O write detail stats (there can be LOTS of these!) }
+misc        { cat=macro   type=m  desc=All misc counters from '--import misc' }

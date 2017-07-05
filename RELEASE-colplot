@@ -1,0 +1,450 @@
+Modification History
+
+4.9.0 April 1, 2015 (remember from here forward, JUST colplot changes)
+
+- report stacked plots in reverse variable order since the old way
+  sometimes some would get overwritten
+
+4.8.3 March 9, 2015
+
+colplot
+- added ability to append '-anything' after date/time, making it possible
+  to have other plot files co-mingled with standard ones
+- plot name for cpumored was cpudmore in the plot by name help and has
+  been fixed
+- no longer need check to verify plot directory exists because there
+  is now logic to allow startup when no plottable files, whether it
+  exists or not.  Before this change, if default directory wasn't there
+  colplot wouldn't even run and allow you to change it.  Now it will.
+
+colmux 4.8.3
+- colmux has been moved to the base collectl kit
+
+4.8.2 November 19, 2014
+
+colmux
+- just to be safe, kill all ssh sessions when exiting in real-time mode
+- in some cases others may try to connect to colmux, watching for port
+  2655 to appear.  if so, accept connection and ignore.  if -quiet the
+  warning message will be suppressed
+- added Alias line to apache config file so it'd would work with 2.4
+- found a problem that goes back awhile, colmux wasn't dealing correctly
+  with -P data and so could have been reporting wrong fields
+- in single line format
+  - added new switch -colnoinst which removes instance portion of column
+    headers which can be quite long
+  - include names of each variable over set of hostnames
+- in multiline format
+  - when noescape flag specified, also disable cursor control so we don't
+    clobber terminal settings
+  - by replacing the leading Time with spaces, I inadvertantly clobbered
+    the StartTime header, so now replace #Time with #spaces
+  - new switches 
+      -finalcr will cause a CR to be added at end of display
+      -hostformat  currently supports one option of char:pos
+    see manpage for details
+
+colplot
+- no changes
+
+4.8.1 September 2014
+
+colplot
+- pattern matching in a few places in colplotlib wasn't correctly dealing with
+  files that had a name with a string of digits surrounded by hypens in their
+  hostname portion
+- update copyright with correct date range
+- allow CPU filters to be expressed as ranges
+- force vertical mode when links param set (which only done in tiny.ph) and
+  comment out error test below which I don't even remember why is there!
+- added L param to tiny.pl to allow disabling links from tiny plots
+- added -lastmins to help (it was always available but I forgot to add it)
+- was appending *.gz to globspec even if already ending in '*' which caused
+  files to be found multiple times
+- when plotting files with the 'last n-minutes' feature it continues to use
+  the last modified timestamp on the file itself and so can plot files from
+  the past.  however, it will now look at the timezone the file was generated
+  in and if different than the local timezone will use the local times for
+  that files x-axis, allowing you to mix files from different locations
+  [thanks philippe]
+- was not correctly stripping out fileroot for png files and so 'tab', etc
+  was being included in png filename
+- changed default plot directory to /var/log/collectl and if no date there colplot
+  WILL still start but display a warning and set a maximum range from from/thru
+  [thanks philippe]
+- not all <label> tags had ending tags and that confused firefox [thanks philippe]
+- need to NOT use space as default separator when splitting out column names
+- -showplot wasn't properly sorting by subsys for html output
+- make debug message missing data fields for mask 16 more explicit 
+
+colmux
+- strip leading whitespace in address file
+- in single-line format remove domain name from host to aid in column naming
+- clarifed help text for -hostwidth, which is actually a MINIMUM width not
+  an absolute one
+- new switches
+  - colhelp puts column numbers over each column in multiline format
+    to aid with column<RETURN> interactive command [thanks john]
+  - colbin to allow running collectl from specific directory
+  - colnodiv names the columns which NOT to apply any colk or col1000 to
+    [thanks hank]
+  - noescape eliminates all escape sequences from output [thanks hank]
+- discovered looking for switch named colnodetflag instead of just colnodet
+- added -sshkey to help output
+- was not dealing correctly with multiline formatting for hosts < 9 chars wide
+
+colgui
+- removed from kit as promised
+
+4.7.1  March 7, 2013
+
+colplot
+- dropped release notes older than 4.0.0 which are from 2006 and earlier
+- no changes to colplot itself after 4.6.4
+- the key attribute 'vertical' is only available starting with gnuplot
+  V4.2 [thanks, Vishal]
+
+colmux
+- dropped release notes older than 3.0.0 which was a complete rewrite anyway
+- add 'u' and 'd' as paging commands you can type interactively if you
+  don't have TermReadKey installed
+- new switch: -colhelp will include numbers on top of each colum in
+  multi-line mode to help identify them for when you don't have TermReadKey
+  in stalled [thanks, John]
+- added colmux release notes from 3.4.2 after older colplot notes
+- added -keepalive with will tell ssh to send periodic keepalives, preventing
+  long-lived connections from timing out and losing connectivity [thanks Vishal]
+
+3.3.1  Nov 10, 2012
+
+colplot - 4.6.4
+- allow + sign in directory name  [thanks philippe]
+- new plots: loadavg, memdirty
+- renamed tcp to tcpold and created new tcp to reflect new type of data
+- added loadavg to sumall
+- added new color clauses to 1st 10 line types in colplot.conf.  there will
+  be ignored if gnuplot < v4
+- only reduce plot width to 1 for PDFs [thanks greg]
+- now supports plotting gz files, BUT also now required Compress::Zlib
+- slight change to INSTALL to make sure apache2 always defined [thanks michey]
+- new option in colplot.conf, deftimeframe, which allows you to control the 
+  setting the from/thru dates, timeframe for last n-minutes, or neither noting
+  large directories can take awhile to scan for the date range [thanks Vishal]
+- added support for colplot.conf parameter containing = since, 
+  eg deftimeframe=float=30
+
+colmux - 3.4.1
+- support for paging through displays with pageup/pagedown
+- support for collectl versions < 3.5 officially dropped
+- dropped -showcolver, added automatic checks against 1st node
+- added -quiet to suppress collectl version mismatch warnings
+- added "-o BatchMode=yes" to ssh command
+- existence check for collectl NOT honoring -colbin
+
+OLDER UTILITY SPECIFIC RELEASE NOTES
+
+*******
+colplot
+*******
+
+4.6.3  Jun 22, 2012
+- relaxed x11 check to ONLY cases where cli used w/o --filedir option
+- make margins tighter when legend or x-axis turned off
+- updated INSTALL/UNINSTALL to be deal with apache2 on debian
+- when legend/xaxis suppressed, reduce corresponding margin sizes
+- new experimental API to allow last minute modification of standard plotting params
+  by specifying a file as an email subject, but only for a single plot type.  added
+  tiny and oneperpage to kit as examples to experiment with
+- allow -suffix after a plot filenames date/time
+- removed divisor from memory field defs in colplotlib.defsand added to plots themselves, 
+  making it possible to use GB for mem plot and MB for some of the individual ones like 
+  membuf and memmap
+- added mask of 32 to allow limiting  y-axis to %f.1 to make less cluttered even though some
+  labels repeat
+- made the spacing between labels in the legend a little tighter 1.0 -> .7 so they're more likely
+  to fit in single column.
+- changed disk/network plot setting so that disk read/writes are never divided by 1000 and
+  network packets always are
+
+4.6.2
+- added mask of 18 to definitions for plots 'swap' and 'nfsmeta'
+- added mask to output for debug=2
+- sort detail plots by instance names [kevin - thanks for the push]
+- can now add addition plot header/extension mappings to defs files
+  using <extmaps> stanza
+- added debug 2048 to colplotlib and enhanced debug 32 a little more too
+- in colplotlib when writing to a pdf, you need to set the teminal type to
+  postscript BEFORE setting the output filename
+- added id/for to checkboxes so you can click on text as well [thanks justin]
+
+4.6.1   Nov  2, 2010
+- see changes to colplotlib.defs
+- see changes to colplotlib.phanksh
+- changed behavior for 'contains'
+  - default set to ANY
+  - if 'contains' contains a '[', ignore any/all and treat as a pdsh expression
+- added nvidia plot definitions
+
+4.5.1   July 24, 2010
+- is 'anyall' or 'contains' used as argument take them as field defaults
+- changed default directory to /var/log/collectl as a number of users prefer this
+  to the example plot directory.  the 'getting started' topic in the FAQ was
+  updated accordingly
+- don't require ghostscript for png files, fixed error check
+- deal with $email format of /dir/prefix and validate against dir
+
+4.4.2   April 26, 2010
+- need to divide the read/write KBs for disk data by 1024 in colplotlib.defs
+
+4.4.1   December 15, 2009
+- clarified copyright notice
+- set $LibDir to binary directory if colplotlib.ph is there, otherwise look in
+  /usr/share/collectl
+
+4.4.0	August 21, 2009
+- open source release
+
+4.3.2	July 21, 2009
+- if plotting by points, set plot type to thickness-1 since we can't change the size of default
+  style 0 and DO want that when thick=1
+- changed message "No files matching your selections were found" to more clearly state the
+  situation
+- if multiple detail files for same day were generated by using -ou and the configuration changed
+  (currently this is only an issues with polyserve), colplot WILL correctly select the correct
+  column numbers for each individual file, something it couldn't do before.
+
+4.3.1   April 28, 2009
+- support for remote plotting
+  - 2 new switches: -addr and -href
+  - new plot type of 'tty' which prints png file to tty
+- removed all print statements from -help routine
+- upgrade to support gnuplot 4.2, which sets canvas size in 'set terminal' and
+  hardcodes 'set size 1,1'
+- rookie bug - wasn't NOT masking the mask variabe with 1 so it wouldn't pick up
+  any other setting.
+- added new switch/webfield, thick to change thickness of plot line (so I can see it!)
+
+4.2.1   March 15, 2009
+- change to colplotlib.ph
+
+4.2.0   January 29, 2009
+- when running gnuplot on a pc, can't echo a 'set terminal' command and so we have
+  to just assume png and x11 are builtin, which they seem to be with 4.2
+- 2 newplots - faults and paging
+- added swap in/out to swap
+- added all 3 to allsum
+
+4.1.5   December 17, 2008
+- updated colplot main help file
+
+4.1.4   December 4, 2008
+- added new environmentatl plot, Power
+- added date range to debug code in findFiles()
+- new switch for cli, --lastmins which specifies the last minutes of data to plot
+  either just prior to the last file access time OR overridden with --time.  Only
+- caveat for --time is you can't specify a begin time so you need something like
+  "-hh:mm" in quote so the leading - doesn't look like a switch
+
+4.1.3   October 9, 2008
+- added options for Fans and Temps
+- see RELEASE-collectl-utils
+
+4.1.2   ???
+- updated a few definitions in colplotlib.defs
+- name of nfs detail plot wrong.  changed it from nfsd to detnfs
+- made error message about missing column name in plot file more explicit
+- fixed bug in live move which caused error when crossing an hour boundary
+- add from date to plot display header and if different add 'thru' as well
+
+4.1.1   Feb 29, 2008
+- added new plot types for cpu to include irs, soft, steal and intrpt
+  (only changes to colplotlib.defs)
+
+4.1.0	Feb 08, 2008
+- make sure gnuplot suppots png/x11 graphics for type in invocation and
+  include with -v status
+
+4.0.2 	Nov 19, 2007
+- changed ambiguous 'type -h for help' message to 'type -help...'
+- was not correctly setting 'unique' on initial call to findFiles which in some 
+  cases [still not entirely understood] caused an infinite loop in that routine
+- had wrong name for default Lustre plots.  Should have been 'sumlus' not 'lustre'
+- changed units on lustre client and OST plot data to MB instead of KB
+
+4.0.1 	Jul 13, 2007
+- enhanced some error messages
+- changed nfs summary plot name, which doesn't exist, to 'sumnfs'
+- fixed colplotlib.ph to handle nested macros as long as defined in right order
+- nested some macros in colplotlib.defs
+- when both divisors the same (ctx/int) and mulitple of 1000, append multiplier
+  to title
+- by default, select plot file with unique or date-stamped name formats based 
+  on the type of the first one that matches selection criteria.  this behavior
+  can be overridden in the CLI with -unique or -nounique
+- changed search order to look for 'conf' file in current dictory, then that
+  where the binary is located and finally /etc
+- if you run collectl on lustre server nodes with -L to force node type(s) you 
+  could end up with columns that contain only 0s if that type of service not
+  running and colplot then generates empty plots.  colplotlib has been modified to
+  ignore such plots
+- installation now supports standard redhat/suse apache configurations
+- for hosts in a cluster that end in a variable width numeric, ensure they
+  collate in the correct order
+- wan't picking up -ylog in command line mode
+
+4.0.0	December 15, 2006
+- major rewrite/simplification of plotting routines via new library 
+  'colplotlib.ph'
+- added new summary/detail plots 'All Plots'
+- added some new plot definitions as well as macros
+- combined 3 lustre plots into 1 as colplot does the right thing
+- changed user-defined plotting mechanism
+- replaced sample files with different ones
+
+******
+colmux
+******
+
+Version 3.2.0  June 22, 2012
+- need to do double-buffering with real-time data since the pointers can
+  change if a new sample comes in before old sample printed
+- new switch: -hostwidth, sets the minimum host name size.  This may be
+  necessary when using alaises that are shorter than hostname which themselves
+  longer than the default width
+- fixed problem of not dealing with non-time options correctly
+- added -username which will set this as initial username for ALL hosts
+  you can still override for individual hosts with @
+- fixed code that checks for missing samples in real-time, single line format
+  to deal with crossing midnight [thanks hank]
+- had to extend timeout for pings because on failures there were issues with good nodes
+  connecting back
+- need to check for verbose import for remapping header in real-time display
+- include '-o StrictHostKeyChecking=no -q' with all ssh commands in case host entry
+  missing from known_hosts and to suppress motd [thanks bob]
+- fixed problem playing back data from multiple hosts on same local machine
+- extended functionality of remote host reachabilty to include ssh testing AND detection
+  of collectl presence and so renamed '-noping' to '-nocheck'
+- new switch, -showcolver, will cause all remore nodes to print their name/collectl
+  version and exit.
+- extend checking for excluding multiple systems when detail data present to include
+  imported modules containing ',d'
+- headers not printing correctly when just doing --import whether 's' or 'd'
+
+Version 3.1.0
+- cleaned up misleading error messages when trying to specify a host/date/time
+  fields with --cols
+
+Version 3.0.0  Jan 4, 2011
+- complete rewrite, added sorting for multi-line format and playback
+  of collectl raw files.  added/removed switches too...
+
+**************
+collectl-utils
+**************
+
+3.2.1
+- forgot to include def for anon memory in <allheaders> which broke any plots using it
+
+3.2
+- 3 new disk detail plots: disktimes, diskque and diskutil
+- added a new plot for anon memory, names memanon
+
+3.1.0  May 27, 2011
+- updates to colplot, colmux
+
+3.0.0  Jan  4, 2011
+- added completely rewritten colmux
+
+2.6.2  Dec  7, 2010
+- fix to pattern match in findFiles
+- allow 'contains' to actually be a pdsh expression
+- install web content in the appropriate directories whether
+  apache there or not!
+- writing files to email destination was broken in 2.6.1
+- added more memory plot definitions to make it easier to see single values
+
+2.6.1  Jul 24, 2010
+- add divisor of 1024 to disk details in colplotlib.defs
+- genplotfiles now looks for collectl in /usr/sbin and /usr/bin
+- remove genplotfiles symlink in UNINSTALL
+- special check for MEM data to make sure all plot fields exist or else skip plot
+- force last colplotlib.defs found to be loaded first and ignore all others
+- added mask of 16 to defs.  see header of colplotlib.defs for details
+- add 'force' flag to both forms of the copy command
+- if user specifies a destination that consists of a directory/prefix, use that
+  prefix for the filename(s) instead of the PID
+- allow a list of locations for gnuplot
+
+2.6.0  Dec 15, 2009
+- modified to match same directory structure as collectl
+- colplotlib.ph will now report an error in initParamsInit() if it can't find
+  colplotlib.defs anywhere AND return a 0 which caller should check for
+
+2.5.0  Aug 21, 2009
+- open source release of ALL components
+
+2.4.2  Jun 29, 2009
+- changes to colplotlib to support ExDS, including adding a mask of 8 which lets 
+  you generate a single plot for combined sub-instances and since most files do 
+  not contain every field this is always combined with a mask of 2
+- added an addition 8 linestyles
+
+2.4.1  Apr 28, 2009
+- changes to colplotlib to support new distributed plotting capabilities
+
+2.3.5  Mar 15, 2009
+- changed error message (and 'last' to 'next') in findFile() for midding collectl version
+- set mask to 2 for 'fault's plot since those headers are NOT generated by older versions
+  of collectl and this was the easiest way to deal with it
+
+2.3.4  Feb 12, 2009
+- support for NFS V4, including new plot definitions with optional columns
+- need to remap older NFS headers to work with new definitions
+- added 'wait' to list of compound field names for CPU data
+
+2.3.3  Dec 04, 2008
+- remove procanalyze from rpm since now part of collectl
+
+2.3.2  Oct 28, 2008
+- allow fields to be combined via +,-,* and / as well as using contants in the math
+- added a few new plot definitions for showing average iosizes along with KBs for
+  networks, disks and interconnect
+- also modified standard cpu plot to show total cpu as well as contribtion from other
+  sources, specifically IRQ, SOFT and STEAL.  Use now also includes NICE.
+  - this may break plot files generated before all the current cpu stats were reported
+    and if this happens you can either regenerate them with a newer version of collectl
+    if you still have the old raw file OR just use 'cpuold/cpudold' in 'plot by name'
+- removed/cleaned-up sample plottable files
+- support for having holes in instance names in detail files to support fans/temps
+- added fans/temps plots to defs file
+
+2.3.0  Apr 11, 2008
+- now that readS in collectl kit, remove from this one
+- changes to colplotlib.defs
+  - new plots: cpumore/cpumored (for irq, soft and steal)
+  - changes to IB/ELAN plot labels from KB to MB
+  - changes to Lustre clt/oss to divide by 1024 instead of 1M
+  - changes to mem plot to add inactive memory
+  - removed fixed y-axis of 50K from Ctx/Int with gnuplot
+  
+2.2.3  Feb 29, 2008
+- changes to colplotlib to delete potential 'old' plot definitions in case
+  they're being defined with additional 'defs'
+- added more plot definitions to include additional cpu fields
+- enhanced procAnalyze to support process I/O stats
+
+2.2.0  Nov 19, 2007
+- was printing "$i+1" in "with ls" phrase in colplotlib instead of
+  evaluating the expression
+- changes for gnuplot V4.2
+  - 'set ticscale' syntax changed to 'set tics scale'
+  - 'set title' now requires 'offset' keyword before actual offset
+    AND you must preceed ,-1 with 0.
+
+2.0.1    Jul 13, 2007
+- changes to colplotlib ph and def files.  see colplot release notes for details
+- support for apache/suse
+
+2.0.0    Dec 15, 2006
+- changes to collectl V2.1 and new plotting library, colplotlib,
+  required changes to everything

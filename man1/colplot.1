@@ -1,0 +1,239 @@
+.TH COLPLOT 1 "OCTOBER 2008" LOCAL "colplot" -*- nroff -*-
+.SH NAME
+
+.B colplot
+- plots collectl data using gnuplot
+
+.SH SYNOPSIS
+colplot -plot plots [-switches]
+
+.SH DESCRIPTIONS
+
+Generate the plots selected by PLOT(s) on either the terminal, a file or 
+delivered as email.  The switches control the files to plot, the timeframes, 
+formats and destinations.  In the case of a web based display, you can run in
+\`live\` mode which will provide for periodic screen refreshes for viewing
+real-time data.  See the web-based help and FAQ for more detail.
+
+.SH PLOTS
+
+The plots themselves are selected from the standard list (see -showplots)
+with -plot.
+
+.B -plot
+.RS
+List one or more plot names either separated with commas and no whitespace or 
+if you want to include whitespace be sure to enclose the string in quotes.
+.RE
+
+.SH SWITCHES
+
+The remainder of the switches which are all optional fall into several categories, 
+the first being those that select the files and timeframes to plot and are as follow:
+
+.B -dir
+.RS
+Look in this directory for plot files rather than the one pointed to by PlotDir in 
+colplot.conf.  A plot file is one with a known extension and a properly formatted
+name.  Any files that fail either of these tests will be ignored.
+.RE
+
+.B -contains "string1 [string2...]"
+.RS
+This field consists of one or more strings separated by commas or whitespace (if 
+whitespace the entire string must be quoted).  Each selected plot file has its name
+compared to each string.  Unless -any is specified, each string must appear somewhere
+in that file name for it to continue to be selected.
+
+As a special case, if there is a string containing a [, it is assumed to be in pdsh
+format, a compact format for specifying multiple hostnames, eg xyz[1-5,10] specifies
+6 hosts whose names all begin with xyz and are followed by one of 6 values.  
+In this case, only files with hostnames exactly matching these names will be selected.
+.RE
+
+.B -all
+.RS
+If specified all strings specified by -contains must match for a file to be
+seleceted for plotting.
+.RE
+
+.B -date from[-thru]
+.RS
+The starting and ending date between which files are selected for plotting.  The dates
+must be in yyyymmdd format.
+.RE
+
+.B -lastmins minutes
+.RS
+Once all the files matching the selection criteria are discovered, use the
+more recent file access time to determine the ending time for plotting data.
+Note, if you've copied the file from elsewhere and didn't preserve the last
+access time in the newly created files this will produce unexpected results.
+.RE
+
+.B -time from[-thru]
+.RS
+The starting and ending time between which data is plotted.  The times must be in
+hh:mm OR hh:mm:ss format.  The hour portion may be 1 or 2 digits.
+.RE
+
+The next set of switches control which plots are actually displayed
+
+.B -filters "string1 [string2...]"
+.RS
+These only apply to detail plots.  They select which devices to produce plots for.
+Invalid or unknown devics are ignored.  In other words, if one selects "-filters 
+eth xyz d1" and requests network plots, only ethernet devices will be displayed.  
+Since 'xyz' is an invalid selection string it is ignored.  Since there are no network 
+devices with 'd1' in their names, it too will be ignored.
+If one choses network and disk plots, ethernet devices as well as any disk names
+with a 'd1' in them will be displayed.
+.RE
+
+.B -type type
+.RS
+By default, plots are geneated using solid lines.  However, one can request a different
+format be used including points or stacked line or stacked points.
+.RE
+
+.B -unique
+.RS
+If one generates multiple unique plot files per day via the -ou switch in collectl,
+those files will be ignored by colplot.  This switch, currently only available via
+the CLI will cause those files to be selected and displayed in the same plot.
+.RE
+
+The next set of switches deal with plot formatting, typically only used under unusual
+circumstances since the default formats meet most needs:
+
+.B -adjust
+.RS
+Colplot uses a default height for the vertical axis which can be overridden via
+-height.  However sometimes a plot is not high enough for all the labels to fit
+in the legend.  This switch will keep the user specified 
+height for all plots in which the legend fits as a single column but increase the
+heights of those that aren't high enough.
+.RE
+
+.B -filetype type
+.RS
+This switch must be used in conjunction with selecting a destination other than the
+terminal, specifically email or directory.  One can use it to change the default
+from a PDF file to either a PNG file for each plot or TTY to send PNG output for one
+plot to STDOUT.
+.RE
+
+.B -height number
+.RS
+This controls the vertical hight of a plot.  This width also includes the xaxis and
+you can therefore increase the room taken by a single plot by choosing -noxaxis.
+.RE
+
+.B -nolegend number
+.RS
+This removes the legend from the plotting area, causing the plot to become physically
+wider.
+.RE
+
+.B -noxaxis
+.RS
+This removed the xaxis from the plotting area, causing the plot to become physically 
+taller.
+.RE
+
+.B -thick number
+.RS
+For some people the thickness of the lines in a plot may be too thin to clearly see
+the different color variations of the lines.  Versions of gnuplot >= 4.2 support
+wider lines and therefore so does colplot.  If using scatter plots, a
+different plotting symbol is actually used.  Values of 2 or 3 are usually sufficient.
+.RE
+
+.B -width number
+.RS
+This switch controls the width of a plot where 1 is the size of a printable page.
+If set to more than 1 and either -file or -mail is chosen it will be forced to 1.
+By setting this number to less than 1, it may be possible to fit more than one plot
+on a page or screen.  As this width also includes the legend, you can 
+further reduce the plot size by choosing -nolegend.
+.RE
+
+.B -xtics n
+.RS
+This causes a tic mark to be drawn on the xaxis every n seconds.  It usually doesn't 
+make sense unless you've chosen a fairly narrow timeframe in which to generate a plot.
+.RE
+
+.B -ylog
+.RS
+Make the y-axis logrithmic.
+.RE
+
+This set of switches deal with the plot destination when it is NOT the terminal
+window:
+
+.B -email address
+.RS
+Linux only.  Address to send plot file(s) to.  The only syntax check is for an '@' to
+appear somewhere in the address string.
+.RE
+
+.B -filedir directory
+.RS
+The name of directory into which the plot file(s) will be placed.  The directory must exist.
+.RE
+
+.B -href
+.RS
+Print the hrefs that would be used if run from a browser.
+.RE
+
+.B -incctl
+.RS
+Really only intended for users familiar with gnuplot, this is the control file used to
+generate the plots.  It allows someone to manually edit the file to change the plot
+appearance and/or labels by rerunning gnuplot using its settings.
+.RE
+
+.B -pagbrk
+.RS
+Instead of generating a page break in a pdf file whenever a page fills, this flag will
+cause a page break whenever the hostname changes.
+.RE
+
+.B -subject subject
+.RS
+Use this subject in email rather than the default.
+.RE
+
+And finally for completeness there are several types of help:
+
+.B -help
+.RS
+Standard help.
+.RE
+
+.B -showparams
+.RS
+This is really a debugging aid, intended for developers and/or people building
+custom plot definitions.  When specified, the plotting parameters for each 
+selected plot will be shown.  Of particular value is the actual column number 
+for each data element in each selected file.
+.RE
+
+.B -showplots
+.RS
+List the names of all the standard plots available for use with the -plots switch.
+.RE
+
+.B -version
+.RS
+Show both the versions of both colplot as well as gnuplot.
+.RE
+
+.SH AUTHOR
+This program was written by Mark Seger (mjseger@gmail.com).
+.br
+Copyright 2003-2008 Hewlett-Packard Development Company, L.P.
+
+.SH SEE ALSO

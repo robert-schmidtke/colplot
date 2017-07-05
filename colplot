@@ -1,0 +1,1501 @@
+#!/usr/bin/perl -w
+
+# Copyright 2004-2014 Hewlett-Packard Development Company, L.P.
+#
+# colplot may be copied only under the terms of either the Artistic License
+# or the GNU General Public License, which may be found in the source kit
+
+# Debug Values:
+#   1 - print interesting stuff
+#   2 - more intersting stuff including many colplotib processing STEPs
+#   4 - don't delete ctl files
+#   8 - remote processing details
+#  16 - show some library subroutine calls
+#  32 - file selection
+#  64 - in web ui, display resultant hrefs and exit
+# 128 - api stuff...
+
+# GOOD GNUPLOT REF: http://t16web.lanl.gov/Kawano/gnuplot/plot1-e.html
+
+use Cwd;
+use Config;
+use Getopt::Long;
+use File::Basename;
+use Time::Local;
+use strict;
+use Compress::Zlib;
+
+#    C o m m o n    I n i t i a l i z a t i o n
+
+my $LibDir='/usr/share/collectl';
+
+my $Version="5.0.0";
+my $Copyright='Copyright 2004-2014 Hewlett-Packard Development Company, L.P.';
+my $License=  "colplot may be copied only under the terms of either the Artistic License\n";
+$License.= "or the GNU General Public License, which may be found in the source kit";
+
+# We might have been invoked via a link (at least on Linux) and we need to know
+# where our physical location is.  Note we have to do this before we call initConfig()
+# because we don't know where the 'require' file is located yet!
+my $exeName=(!defined(readlink($0))) ? $0 : readlink($0);
+my $BinDir=dirname($exeName);
+my $pcFlag=($Config{'osname'}=~/MSWin32/) ? 1 : 0;
+my $sep=($pcFlag) ? "\\" : "/";
+
+# If the plot library exists in the same directory as colplot, we load it
+# instead of the standard one, which MUST be the case on a PC since we're no
+# longed supporting a lib/
+$LibDir=$BinDir    if -e "$BinDir${sep}colplotlib.ph";
+require "$LibDir${sep}colplotlib.ph";
+
+# set up $mycfg data structure, required by colplotlib and initparams
+my $mycfg={ exename=>$exeName, bindir=>$BinDir, libdir=>$LibDir, pcflag=>$pcFlag };
+initConfig($mycfg);
+
+# These are globals
+my ($debug, $config, $form, $mode, $chgdir, $dir);
+my ($fromDate, $thruDate, $fromTime, $thruTime, $refresh, $winsize, $timeframe);
+my ($contains, $anyall, $width, $height, $thick, $legend, $adjust, $xaxis, $pagbrk, $xtics);
+my ($ylog, $plots, $filters, $instance, $email, $filetype, $incctlFlag, $subject);
+my ($plotType, $yminwidth, $tabcol, $uniqueFlag, $oneperdayFlag, $address, $plotfile);
+
+# some defaults
+$uniqueFlag=-1;
+$debug=$oneperdayFlag=$incctlFlag=$xtics=0;
+$mode=$timeframe=$plots=$form=$filetype=$contains=$anyall=$email=$subject=$filters=$address='';
+$dir=$mycfg->{PlotDir};
+
+# If not running gnuplot 4 on a pc (which always has x11 and png support AND won't
+# respond to a query), before we begin we want to know what kind of graphics gnuplot
+# supports both for the -v command as well as to warn use via the web.
+my ($x11Flag, $pngFlag)=(1,1);
+if (!$pcFlag || $mycfg->{GnuVersion}<4)
+{
+  my $command="echo 'set terminal x11'|$mycfg->{GnuPlot} 2>&1";
+  my $result=`$command`;
+  $x11Flag=($result=~/unknown or ambiguous/) ? 0 : 1;
+  $command="echo 'set terminal png'|$mycfg->{GnuPlot} 2>&1";
+  $result=`$command`;
+  $pngFlag=($result=~/unknown or ambiguous/) ? 0 : 1;
+}
+
+# I wanted this in one place so they'll be consistent
+my $notfound="No plottable files match your selection criteria.\n";
+$notfound.="Are your dir, selection dates and/or file protections right?";
+
+#####################################################
+#	C o m m a n d    L i n e    I n t e r f a c e
+#####################################################
+
+# If we didn't come in via the web...
+my $cliFlag=0;
+if (!$mycfg->{htmlflag})
+{
+  error("Type -help for help")    if scalar(@ARGV)==0;
+  cli();
+  exit;
+}
+
+#####################################################
+#       W e b    I n t e r f a c e
+#####################################################
+
+# Initialization
+my $thisScript=basename($0);
+
+# make sure buffers flushed or we may deliver partial plots
+select STDOUT;
+$|=1;
+
+# Note that now all browsers set QUERY_STRING
+my ($qs, $vars, @vars);
+$qs=$vars=$ENV{"QUERY_STRING"};
+$qs=$vars=''    if !defined($qs);
+@vars=split(/&/, $vars);
+
+# Need to uncomment lines to see stuff outside loop
+#htmlHeader($mycfg, 'debug');
+#print "<BR>Query: $vars\n";
+
+# Defaults
+$fromTime="00:00";
+$thruTime="24:00";
+
+foreach my $element (@vars)
+{
+  # Note - convert parameters AFTER splitting on the & and = incase these
+  # are embedded in data itself...
+  (my $name, my $value)=split(/=/, $element);
+  $value=~s/%([\dA-Fa-f][\dA-Fa-f])/pack('C', hex($1))/eg;
+  $value=~s/\+/ /g    if $name ne 'directory';
+  printText("Name: $name Value: $value")    if $debug & 1;
+
+  showplots($mycfg)    if $name=~/^showplots/i;
+
+  # Debug flag is handled slightly differently
+  $debug=defined($value) ? $value : 1    if ($name=~/debug/i && $value=~/\d+/);
+  $config=$value      if $name=~/^config/;
+  $form=$value        if $name=~/^form/i;
+  $mode=$value        if $name=~/^mode/i;
+  $chgdir=$value      if $name=~/^chgdir/i;
+  $dir=$value         if $name=~/^dir/i;
+  $fromDate=$value    if $name=~/^fdate/i;
+  $thruDate=$value    if $name=~/^tdate/i;
+  $fromTime=$value    if $name=~/^ftime/i;
+  $thruTime=$value    if $name=~/^ttime/i;
+  $refresh=$value     if $name=~/^refresh/i;
+  $winsize=$value     if $name=~/^winsize/i;
+  $timeframe=$value   if $name=~/^timeframe/i;
+  $contains=$value    if $name=~/^contains/;
+  $anyall=$value      if $name=~/^anyall/;
+  $width=$value       if $name=~/^width/i;
+  $height=$value      if $name=~/^height/i;
+  $thick=$value       if $name=~/^thick/i;
+  $legend=$value      if $name=~/^legend/i;
+  $adjust=$value      if $name=~/^adjust/i;
+  $xaxis=$value       if $name=~/^xaxis/i;
+  $pagbrk=$value      if $name=~/^pagbrk/i;
+  $xtics=$value       if $name=~/^xtics/i && $value ne '';
+  $ylog=$value        if $name=~/^ylog/i;
+  $plots.="$value "   if $name=~/^plots|plotnames/i && $plots!~/$value/;
+  $filters=$value     if $name=~/^filters/;
+  $instance=$value    if $name=~/^instance/;
+  $email=$value       if $name=~/^email/;
+  $filetype=$value    if $name=~/^filetype/;
+  $incctlFlag=1       if $name=~/^incctl/i && $value=~/on/i;
+  $subject=$value     if $name=~/^subj/i   && $value ne '';
+  $plotType=$value    if $name=~/^type/i;
+  $yminwidth=$value   if $name=~/^yminwidth/i;
+  $tabcol=$value      if $name=~/^tabcol/i;
+  $uniqueFlag=1       if $name=~/^unique/i;
+  $oneperdayFlag=1    if $name=~/^oneperday/i;
+  $address=$value     if $name=~/^addr/i;
+  $plotfile=$value    if $name=~/^filename/i;    # amazing this was never used before
+}
+$plots=~s/\s+$//;    # trim tailing space
+$mycfg->{debug}=$debug;
+
+if ($mycfg->{deftimeframe}=~/float/)
+{
+  $winsize=($mycfg->{deftimeframe}=~/float=(\d+)/) ? $1 : 60;
+  $timeframe='float';
+}
+
+#    S e t    D e f a u l t s
+
+$mode='live'     if $mode=~/on/;
+if ($mycfg->{htmlflag})
+{
+  $mode='normal'    if $mode eq '';
+
+  $width= defined($mycfg->{htmlWidth})  ? $mycfg->{termWidth}  : 1.2
+      if !defined($width);
+  $height=defined($mycfg->{htmlHeight}) ? $mycfg->{termHeight} : 0.3
+      if !defined($height);
+}
+else
+{
+  $width= defined($mycfg->{termWidth})  ? $mycfg->{termWidth}  : 1
+      if !defined($width);
+  $height=defined($mycfg->{termHeight}) ? $mycfg->{termHeight} : 0.2
+      if !defined($height);
+}
+$thick=1    if !defined($thick);
+
+$fromTime="0$fromTime"    if length($fromTime)<5;
+$thruTime="0$thruTime"    if length($thruTime)<5;
+
+####################################
+#   M a i n    Q u e r y    F o r m
+####################################
+
+if ($form eq '')
+{
+  htmlHeader($mycfg, "ColPlot");
+  error("$mycfg->{GnuPlot} does not support png graphics.  See FAQ for details.")
+      if !$pngFlag;
+
+  # defaults
+  $refresh=60        if !defined($refresh);
+  $winsize='60'      if !defined($winsize);
+  $legend='on'       if !defined($legend);
+  $adjust='off'      if !defined($adjust);
+  $xaxis='on'        if !defined($xaxis);
+  $pagbrk='off'      if !defined($pagbrk);
+  $ylog='off'        if !defined($ylog);
+
+  # get starting/ending dates for all files in directory (type3 doesn't use 5th param)
+  # noting it's now OK to point to a directory with no plot files [yet] though they'll
+  # eventually need to be there
+  my $pparams= {fdate=>20010101, tdate=>20380101, contains=>'', unique=>$uniqueFlag };
+  if (!findFiles(3, $mycfg, $pparams, "$dir$sep*", undef))
+  {
+    # findFiles() diddles the dates so we need to reset them
+    displayText($mycfg, "<center>warning: no plottable files found in $dir$sep</center>", 3);
+    $pparams= {fdate=>20010101, tdate=>2038010};
+  }
+  $fromDate=$pparams->{fdate};
+  $thruDate=$pparams->{tdate};
+
+  # Note the 'magic' by setting the next form via 'genpage'
+  print "<body>\n";
+  print "<FORM NAME=main ACTION=$thisScript METHOD=GET>\n";
+  print "<input type=hidden name=form value=genpage>\n";
+  print "<input type=hidden  name=debug value=$debug>\n";
+  print "<input type=hidden  name=directory value=$dir>\n";
+  print "<input type=hidden  name=mode value=$mode>\n";
+  print "<input type=hidden  name=addr value=$address>\n";
+
+  my $helpFile="$mycfg->{HelpDir}colplot-help.html";
+  print  "<center>\n";
+  printf "<b><font size=6>ColPlot %sV$Version</b>\n", $mode=~/live/ ? '<i>Live</i> ' : '';
+  print  "<font size=4><br><b>For Directory: $dir</b>\n";
+  print  "<font size=3>\n";
+  print  "<a href=FAQ-colplot.html>view faq</a>\n";
+  print  "<br>\n";
+  print  "<input type=submit VALUE='Generate Plot'>\n";
+  print  "<input type=submit NAME=chgdir VALUE='Change Dir'>\n";
+  print  "<input type=submit NAME=chgdir VALUE='List Dir'>\n";
+  print  "<input type=button VALUE='Help' onclick=window.open('$helpFile')>\n";
+
+  print "<br><input type=checkbox name=mode id=enable><label for='enable'></label>\n";
+  print "<b>Enable Refresh Every <input type=text name=refresh size=1 value=$refresh id=refresh><label for='refresh'>seconds</label></b>\n";
+  print "</center>\n";
+
+  my $tfixed=($mycfg->{deftimeframe}!~/float/) ? 'checked' : '';
+  my $tfloat=($mycfg->{deftimeframe}=~/float/) ? 'checked' : '';
+  print "<p>\n";
+  print "<b>From: <input type=text name=fdate size=8 value=$fromDate>\n";
+  print "<input type=text name=ftime size=5 value=$fromTime>\n";
+  print "<b>Thru: <input type=text name=tdate size=8 value=$thruDate>\n";
+  print "<input type=text name=ttime size=5 value=$thruTime>\n";
+  print "<input type=radio name=timeframe value=fixed checked>\n";
+  print "<font=5><i>OR</i>\n";
+  print "<b>Last: <input type=text name=winsize size=1 value=$winsize> Minutes\n";
+  print "<input type=radio name=timeframe value=float>\n";
+
+  # If anyall passed as 'all', use that as default, otherwise go with 'any'
+  my  $allSel=($anyall=~/all/) ? 'selected="selected"' : '';
+  my  $anySel=($allSel eq '')  ? 'selected="selected"' : '';
+print <<EOF;
+<p>
+<b>Filenames Containing</b>
+  <select name="anyall" size="1">
+    <option $allSel>All</option>
+    <option $anySel>Any</option>
+  </select></td>
+<b>of: </b><INPUT type=text size=5 name=contains value=$contains>
+<b>Plot Type:</b>
+  <select name="type" size="1">
+    <option selected="selected">Default</option>
+    <option value='l'>line</option>
+    <option value='p'>point</option>
+    <option value='ls'>stackedline</option>
+    <option value='ps'>stackedpoint</option>
+  </select></td>
+<b>Display:</b>
+    <select name=tabcol size=1>
+    <option value=vert>Vertical</option>
+    <option value=vertday>VerticalDay</option>
+    <option value=sp selected>SysPlot</option>
+    <option value=ps>PlotSys</option>
+    <option value=dsp>DaySysPlot</option>
+    <option value=dps>DayPlotSys</option>
+    <option value=spd>SysPlotDay</option>
+    <option value=sdp>SysDayPlot</option>
+    <option value=pds>PlotDaySys</option>
+    <option value=psd>PlotSysDay</option>
+  </select>
+
+<p><b>Summary Plots</b>
+<table>
+<tr>
+  <td><input type=checkbox name=plots id=sumall value=sumall><label for='sumall'>All Plots</label></td>
+  <td><input type=checkbox name=plots value=cpu id=cpu>      <label for='cpu'>CPU</label></td>
+  <td><input type=checkbox name=plots value=ctxint id=ctxint><label for='ctxint'>Ctx/In</label>t</td>
+  <td><input type=checkbox name=plots value=disk id=disk>    <label for='disk'>Dis</label>k</td>
+  <td><input type=checkbox name=plots value=inode id=inode>  <label for='inode'>I-Node</label></td>
+  <td><input type=checkbox name=plots value=inter id=inter>  <label for='inter'>IConnec</label>t</td>
+  <td><input type=checkbox name=plots value=sumlus id=sumlus><label for='sumlus'>Lustr</label>e</td>
+</tr>
+<tr>
+  <td><input type=checkbox name=plots value=mem id=mem>      <label for='mem'>Memory</label></td>
+  <td><input type=checkbox name=plots value=net id=net>      <label for='net'>Network</label></td>
+  <td><input type=checkbox name=plots value=sumnfs id=sumnfs><label for='sumnfs'>NF</label>S</td>
+  <td><input type=checkbox name=plots value=proc id=proc>    <label for='proc'>Proc</label></td>
+  <td><input type=checkbox name=plots value=sock id=sock>    <label for='sock'>Socket</label></td>
+  <td><input type=checkbox name=plots value=swap id=swap>    <label for='swap'>Swap</label></td>
+  <td><input type=checkbox name=plots value=tcp id=tcp>      <label for='tcp'>TCP</label></td>
+</tr>
+<tr><td colspan=5><b>Detail Plots</b></td></tr>
+<tr>
+  <td><input type=checkbox name=plots value=detall id=detail>    <label for='detail'>All Plots</label></td>
+  <td><input type=checkbox name=plots value=cpudet id=cpudet>    <label for='cpudet'>CPU</label></td>
+  <td><input type=checkbox name=plots value=diskdet id=diskdet>  <label for='diskdet'>Disk</label></td>
+  <td><input type=checkbox name=plots value=detnfs id=detnfs>    <label for='detnfs'>NFS</label></td>
+  <td><input type=checkbox name=plots value=interdet id=interdet><label for='interdet'>IConnect</label></td>
+  <td><input type=checkbox name=plots value=netdet id=netdet>    <label for='netdet'>Network</label></td>
+  <td><input type=checkbox name=plots value=detlus id=detlus>    <label for='detlus'>Lustre</label></td>
+  <td><input type=checkbox name=plots value=fans id=fans>        <label for='fans'>Fans</label></td>
+  <td><input type=checkbox name=plots value=temps id=temps>      <label for='temps'>Temps</label></td>
+  <td><input type=checkbox name=plots value=power id=power>      <label for='power'>Power</label></td>
+<tr>
+  <td colspan=2><b>Detail Filters:</b></td>
+  <td colspan=3><input type=input name=filters size=40></td>
+</tr>
+<tr>
+  <td colspan=2><b>Plots by Name(s):</b></td>
+  <td colspan=3><input type=input name=plotnames size=40></td>
+  <td><input type=button VALUE='Help' onclick=window.open('?showplots')></td>
+ </tr>
+</table>
+EOF
+
+  # GS is optional, but if not there we can't do pdfs
+  my $gsFlag=(defined($mycfg->{GS}) && -e $mycfg->{GS}) ? 1 : 0;
+  my $selectPdf=($gsFlag) ? '<option value=pdf>pdf</option>' : '';
+
+  print "<p>Email or Directory: <INPUT type=text size=20 name=email>\n";
+  print "Subj: <INPUT type=text size=20 name=subject>\n";
+  print "Type <select name=filetype>\n";
+  print " $selectPdf\n";
+  print " <option value=png>png</option>\n";
+  print " <option value=none>none</option>\n";
+  print "</select>\n";
+  print "&nbsp;<input type=checkbox name=incctl id=incctl><label for='incctl'>Include Ctl File: </label>\n";
+
+  print "<p><b>Format Control/Destination</b></b><br>\n";
+  print "Width: <INPUT type=text name=width size=1 value=$width>\n";
+  print "Height: <INPUT type=text name=height size=1 value=$height>\n";
+  print "Thick: <INPUT type=text name=thick size=1 value=$thick>\n";
+  print "X-Increment: <INPUT type=text name=xtics size=1 value=$xtics>\n";
+
+  printf "<input type=checkbox name=legend %s id=legend><label for='legend'>Legend</label>\n", $legend=~/on/ ? 'checked' : '';
+  printf "<input type=checkbox name=adjust %s id=adjust><label for='adjust'>AdjustHeight</label>\n", $adjust=~/on/ ? 'checked' : '';
+  printf "<input type=checkbox name=pagbrk %s id=pagbrk><label for='pagbrk'>PagBrk</label>\n", $pagbrk=~/on/ ? 'checked' : '';
+  print  "<input type=checkbox name=Ylog id=ylog><label for='ylog'>YLog</label>\n";
+  printf "<input type=checkbox name=xaxis %s id=xaxis><label for='xaxis'>X-Axis</label>\n", $xaxis=~/on/ ? 'checked' : '';
+
+  print "<p>\n";
+  print "<input type=submit VALUE='Generate Plot'>\n";
+  print "<input type=reset  VALUE=Reset>\n";
+  print "</form>\n";
+}
+
+########################################
+#    C H A N G E     D I R E C T O R Y
+########################################
+
+# This must preceed genpage
+elsif (defined($chgdir) && $chgdir=~/Change Dir/i)
+{
+  htmlHeader($mycfg, "ColPlot");
+  print "<FORM NAME=main ACTION=$thisScript METHOD=GET>\n";
+  print "<input type=hidden  name=debug value=$debug>\n";
+  print "<p><b>New Directory Name: <INPUT type=text name=directory size=40 value=$dir>\n";
+  print "<p>\n";
+
+  print "<input type=submit VALUE='Change It!'>\n";
+}
+
+#################################
+#    L I S T   D I R E C T O R Y
+#################################
+
+# This too must preceed genpage
+elsif (defined($chgdir) && $chgdir=~/List Dir/)
+{
+  my $command=$pcFlag ? "dir $dir" : "ls -x $dir";
+  htmlHeader($mycfg, $dir);
+  print "<form>\n";
+
+  print "<h3>Contents of: $dir</h3>\n";
+  open(LS, "$command |") or die "<BR>Couldn't execute $command";
+
+  print "<PRE>\n";
+  while (my $line=<LS>)
+  {
+    print $line;
+  }
+  close LS;
+  print "<PRE>\n";
+
+  print "<p>\n";
+  print "</form>\n";
+}
+
+#########################################
+#   G e n e r a t e    P a g e   H T M L
+#########################################
+
+elsif ($form=~/genpage/i)
+{
+  error("You must specify at least 1 plot")        if $plots eq '';
+
+  $legend='off'    if !defined($legend);
+  $adjust='off'    if !defined($adjust);
+  $xaxis='off'     if !defined($xaxis);
+  $pagbrk='off'    if !defined($pagbrk);
+  $ylog='off'      if !defined($ylog);
+
+  my $pparams={
+        uitype=>    1,
+	dir=>       $dir,
+	contains=>  $contains,
+	anyall=>    $anyall,
+	plottype=>  $plotType,
+	plots=>     $plots,
+	fdate=>     $fromDate,
+	tdate=>     $thruDate,
+	ftime=>     $fromTime,
+	ttime=>     $thruTime,
+	width=>     $width,
+        height=>    $height,
+        thick=>     $thick,
+	any=>       $anyall,
+	legend=>    $legend,
+        adjust=>    $adjust,
+	xaxis=>     $xaxis,
+        pagbrk=>    $pagbrk,
+        xtics=>     $xtics,
+        ylog=>      $ylog,
+        email=>     $email,
+	filetype=>  $filetype,
+	incctl=>    $incctlFlag,
+	subject=>   $subject,
+        filters=>   $filters,
+        mode=>      $mode,
+        timeframe=> $timeframe,
+        winsize=>   $winsize,
+        yminwidth=> $yminwidth,
+        unique=>    -1    # use type of first file found
+	};
+
+  # Unless the user has explicitly chosen a 3-way table for display, we
+  # do multi-day plots.
+  $pparams->{oneperday}=($tabcol!~/vertday|dps|dsp|pds|psd|sdp|spd/) ? 0 : 1;
+
+  # Allow single digit hours in the time field
+  $fromTime="0$fromTime"    if length($fromTime)==4;
+  $thruTime="0$thruTime"    if length($thruTime)==4;
+
+  validate($pparams);
+
+  my @returnArray;
+  # For local plots, which if typical, get a list of URLs for generating each individual plot.
+  if ($address eq '')
+  {
+    @returnArray=buildPage($mycfg, $pparams);
+    if (scalar(@returnArray==0))
+    {
+      printText($notfound, 3);
+      printText("Did you copy any files without preserving access times?", 3);
+      exit;
+    }
+  }
+  else
+  {
+    # For remote plots, possibly in pdsh format, convert to an array of addresses
+    my @addresses=pdshFormat($address);
+
+    foreach my $addr (@addresses)
+    {
+      $plots=~s/ /,/g;    # make sure plot names comma separated
+      my $command="ssh $addr $exeName -dir $dir -plot $plots -href ";
+      $command.="-date $fromDate-$thruDate -time $fromTime-$thruTime -width $width -height $height -thick $thick ";
+      $command.=  "-contains $contains "         if $contains ne '';
+      $command.=  "-any "                        if $anyall eq 'any';
+      $command.=  "-nolegend "                   if $legend eq 'off';
+      $command.=  "-adjust "                     if $adjust eq 'on';
+      $command.=  "-noxaxis "                    if $xaxis eq 'off';
+      $command.=  "-xtics $xtics "               if $xtics ne '';
+      $command.=  "-ylog "                       if $ylog eq 'on';
+      displayText($mycfg, "REMOTE: $command")    if $debug & 8;
+      my @hrefs=`$command`;
+      foreach my $href (@hrefs)
+      {
+        $href=~s/filetype=png/filetype=tty/;
+        $href=~s/\s+$//;    # not really sure why trailing space
+	$href.="\&addr=$addr";
+	displayText($mycfg, "HREF: $href")    if $debug & 8;
+        if ($href!~/^\&filename/)
+        {
+          displayText($mycfg, "Error: $href")    if $href!~/^No files matching/;
+	  last;
+        }
+        push @returnArray, $href;
+      }
+    }
+  }
+
+  #    D i s p l a y    P l o t s    O R    D i s p o s e    O f    A    F i l e
+
+  if ($email eq '')
+  {
+    # We need to store the hrefs in a hash, indexed by our display parameters so we can
+    # load them into a table in the right order.
+    my (%hrefs, %allhosts, %allplots, %alldates);
+    my ($numhosts, $numplots, $numdates, $vertFlag)=(0,0,0,0);
+    foreach my $params (@returnArray)
+    {
+      $params=~/filename=(.*)&plots=(.*?)&instance=(.*?)&/;
+      my $filename=basename($1);
+      my $plotname="$2$3";
+      my $instance=$3;
+
+      # Pull hostname and date out of filename (possibly including a differentiating prefix)
+      $filename=~/(.*)-(\d{8}).*\.\w+$/;
+      my $hostname=$1;
+      my $fromdate=$2;
+
+      # If hostname ends in a numeric, we may have multiple hosts of a cluster
+      # and if single digits they won't collate correctly.  By forcing to 6
+      # digits we can handle >1M hosts!
+      $hostname=~s/(\d+)$/sprintf("%06d-$hostname", $1)/e;
+
+      # Convert the returned parameter string until a full href
+      my $href="<img src=\"./$thisScript?form=genplot&debug=$debug$params\">";
+      displayText($mycfg, $href)    if $debug & 64;
+
+      # We need unique entries for $href so we don't get any duplicate entries which
+      # would result in losing an entry.  In the case of 'sp' and 'ps', there is never
+      # more then one entry per system/plot combo and so we don't need (or want) a date.
+      # if we know we'll only have a 1 column table (keeps the output more compressed)
+      # as long as unique and '$oneColFlag' is set.  Including the instance name with
+      # the plot also assures uniqueness for both summary as well as detail plots.
+      $vertFlag=1    if $tabcol=~/vert/;
+      $hrefs{"$plotname:$hostname"}=$href              if $tabcol eq 'sp';
+      $hrefs{"$hostname:$plotname"}=$href              if $tabcol eq 'ps';
+      $hrefs{"$hostname:$plotname:$fromdate"}=$href    if $tabcol eq 'vert' || $tabcol eq 'vertday';
+      $hrefs{"$hostname:$plotname:$fromdate"}=$href    if $tabcol eq 'dsp';
+      $hrefs{"$plotname:$hostname:$fromdate"}=$href    if $tabcol eq 'dps';
+      $hrefs{"$fromdate:$hostname:$plotname"}=$href    if $tabcol eq 'pds';
+      $hrefs{"$hostname:$fromdate:$plotname"}=$href    if $tabcol eq 'psd';
+      $hrefs{"$plotname:$fromdate:$hostname"}=$href    if $tabcol eq 'spd';
+      $hrefs{"$fromdate:$plotname:$hostname"}=$href    if $tabcol eq 'sdp';
+
+      # Save a set of all unique names for sort later on
+      $numhosts++    if !defined($allhosts{$hostname});
+      $numplots++    if !defined($allplots{$plotname});
+      $numdates++    if !defined($alldates{$fromdate});
+      $allhosts{$hostname}='';
+      $allplots{$plotname}='';
+      $alldates{$fromdate}='';
+      #printText("TABCOL: $tabcol HOST: $hostname  PLOT: $plotname  DATE: $fromdate");
+    }
+    exit    if $debug & 64;
+
+    # If the main sort (column name) only has a single instance, we DON'T want to
+    # display as a table.  NOTE - it's possible to display 3-way plots that have a
+    # single row as a single column but I'm not sure if I should.  For that matter
+    # I'm not even sure if the following should be done either.
+    if (length($tabcol)==2)
+    {
+      $vertFlag=1    if ($numhosts==1 && $tabcol eq 'ps') ||
+                        ($numplots==1 && $tabcol eq 'sp');
+    }
+
+    #    G e n e r a t e    H T M L    H e r e
+
+    htmlHeader($mycfg, "plots");
+
+    # still not sure why the test below so commented out for now and see if anything
+    # breaks in the future.  meanwhile, if links param defined make sure we're in
+    # vertical mode
+    $vertFlag=1    if defined($pparams->{links});
+    #error("You cannot select multiple plots when using the 'Subject' API")
+    #    if !$vertFlag && defined($pparams->{links}) && $pparams->{links}==1;
+
+    # API that allows links to be added to each plot
+    my $subtitle='';
+    my ($apiBase, $apiParams);
+    if (defined($pparams->{links}) && $pparams->{links}==1)
+    {
+      ($apiBase,$apiParams)=loadAPI($pparams);
+      my $apiInit=    "${apiBase}InitParams";
+      my $apiSubtitle="${apiBase}Subtitle";
+
+      no strict 'refs';
+      &$apiInit($mycfg, $pparams, '', $apiParams);
+      $subtitle=&$apiSubtitle();
+    }
+
+    # turn from date into yyyy/mm/dd and if different do the same for thru date
+    my $temp=$pparams->{fdate};
+    my $fDate=sprintf("%s\/%s\/%s", substr($temp,0,4),  substr($temp,4,2),  substr($temp,6,2));
+    $temp=$pparams->{tdate};
+    my $tDate=sprintf("%s\/%s\/%s", substr($temp,0,4),  substr($temp,4,2),  substr($temp,6,2));
+
+    # very tricky and only in floating mode where we're looking at the last n-minutes.  if the plots
+    # have come from multiple servers in different timezones we ALWAYS flag time frame being displayed
+    # at the top of the page as local to the server colplot is running on.
+    displayText("<br>MYZONE: $mycfg->{tzone} TZSAME: $pparams->{tzsame}  TZONE: $pparams->{tzone}")    if $debug & 1;
+
+    my $mod='';
+    if ($pparams->{timeframe} eq 'float')
+    {
+      if ($pparams->{tzsame} eq '0')
+      { $mod="<i><b> ---> Local Time <---</b></i>"; }
+      elsif ($pparams->{tzsame} ne $mycfg->{tzone})
+      {
+	# now we know the plots are for some other time zone we we need to find the
+	# differences between it and our local time so we can display the remote times
+	# so first get the remote timezone hours/mins (we probably don't need mins)
+	$pparams->{tzsame}=~/(.*)(\d{2})(\d{2})/;
+	my $tzsign=($1 eq '-') ? '-' : '+';
+	my $tzhour="$tzsign$2";
+	my $tzmins="$tzsign$3";
+
+	# and do the same for our local timezone
+	$mycfg->{tzone}=~/(.*)(\d{2})(\d{2})/;
+	my $mysign=($1 eq '-') ? '-' : '+';
+	my $myhour="$mysign$2";
+	my $mymins="$mysign$3";
+	#print "<BR>SIGN: $mysign  HOUR: $myhour  MINS: $mymins";
+
+	# this is the amount we need to shift the times to match the remote timezone
+	my $shiftHour=$tzhour-$myhour;
+	my $shiftMins=$tzmins-$mymins;
+	#print "<BR>HOUR: $shiftHour  MINS: $shiftMins";
+
+        # this is the difference in secs of the remote timezone and the window
+	# is the difference between from and thru
+        my $tzdiff=$shiftHour*3600+$shiftMins*60;
+        my $window=$pparams->{winsize}*60;
+	#displayText($mycfg, "tzdiff: $tzdiff  WINDOW: $window, TRHU: $tDate  THRUTIME: $pparams->{ttime}");
+
+        # convert the local thru time to the remote file's thru time in secs
+        my $year=substr($tDate, 0, 4);
+        my $mon= substr($tDate, 5, 2);
+        my $day= substr($tDate, 8, 2);
+        my ($hour, $mins)=split(/:/, $pparams->{ttime});
+        my $localSecs=timelocal(0, $mins, $hour, $day, $mon-1, $year-1900);
+	#displayText($mycfg, "YEAR: $year, MON: $mon, DAY: $day  HOUR: $hour  MINS: $mins  LOCSECS: $localSecs");
+
+	# This will generate from/thru time based on other timezone
+	my $otherTSecs=$localSecs+$tzdiff;
+	my $otherFSecs=$otherTSecs-$window;
+        my ($fsecs, $fmins, $fhour, $fday, $fmon, $fyear)=localtime($otherFSecs);
+        $fDate=sprintf("%d%02d%02d", $fyear+1900, $fmon+1, $fday);
+        $pparams->{ftime}=sprintf("%02d:%02d", $fhour, $fmins);
+
+        my ($tsecs, $tmins, $thour, $tday, $tmon, $tyear)=localtime($otherTSecs);
+        $tDate=sprintf("%d%02d%02d", $tyear+1900, $tmon+1, $tday);
+        $pparams->{ttime}=sprintf("%02d:%02d", $thour, $tmins);
+
+	$mod="<i><b> GMT $pparams->{tzone}</b></i>";
+      }
+    }
+
+    $tDate=''    if $tDate eq $fDate;    # looks cleaner ;)
+
+    print  "<center><font size=4>\n";
+    printf "<b>ColPlot$subtitle ";
+    printf "<i>Live!</i> Refresh: $refresh seconds</b>"    if $mode=~/live/;
+    print  "<br>From: $fDate $pparams->{ftime} Thru: $tDate $pparams->{ttime}</b></font>$mod<br>\n";
+
+    # The default is to report on multiple days/plot!  However, if one also specifies
+    # a timeframe that doesn't go midnite to midnite, warn them that these times only
+    # apply to starting/ending records.  However if plots are only for a single day,
+    # no need to warn them about anything.
+    print  "<br><font size=3><b><i>Warning - the from/thru times only apply to first/last date respectively</i></b>\n"
+	if !$pparams->{oneperday} && ($pparams->{fdate} ne $pparams->{tdate}) && ($fromTime ne '00:00' || $thruTime ne '24:00');
+
+    # Force refresh if we're in 'live' mode
+    print "<META HTTP-EQUIV=\"Refresh\" CONTENT=\"$refresh\">\n"    if $mode=~/live/;
+
+    # This is really an optimization - if we want to do things vertically, we use
+    # less screen real-estate by NOT putting things into a table...
+    my (%hash1, %hash2, %hash3);
+
+    if ($vertFlag)
+    {
+      my $firstKey=1;
+      foreach my $key (sort keys %hrefs)
+      {
+        # API that allows links to be added to each plot
+	if (defined($pparams->{links}) && $pparams->{links}==1)
+        {
+          no strict 'refs';
+          my $apiLinks="${apiBase}Links";
+          my $href=&$apiLinks($mycfg, $hrefs{$key});
+
+          print "<a href=$href>$hrefs{$key}</a>\n";
+          $firstKey=0;
+	}
+        else
+        {
+          # By leaving off the <br> we can play games with multiple entries/line
+          print "$hrefs{$key}\n";
+        }
+      }
+      print "</html>\n";
+    }
+    elsif ($tabcol eq 'ps' || $tabcol eq 'sp')
+    {
+      %hash1=%allplots    if $tabcol eq 'sp';
+      %hash2=%allhosts    if $tabcol eq 'sp';
+      %hash1=%allhosts    if $tabcol eq 'ps';
+      %hash2=%allplots    if $tabcol eq 'ps';
+
+      print "<table>\n";
+      foreach my $name1 (sort keys %hash1)
+      {
+        my $row='';
+        foreach my $name2 (sort keys %hash2)
+        {
+          my $href=$hrefs{"$name1:$name2"};
+          $row.=sprintf("<td valign=top>%s</td>", defined($href) ? $href : '');
+        }
+        print "<tr>$row</tr>\n";
+      }
+      print "</table>\n";
+      print "</html>\n";
+    }
+    else
+    {
+      # We want to set up looping parameter such that we go through all
+      # possible combinations of host-plot-date in the selected order.
+      # column header is always the inner most sort while the
+      # the other 2 are 1st and 2nd in reverse order
+      %hash1=%alldates    if $tabcol=~/^.{1}d.{1}/;
+      %hash1=%allplots    if $tabcol=~/^.{1}p.{1}/;
+      %hash1=%allhosts    if $tabcol=~/^.{1}s.{1}/;
+      %hash2=%alldates    if $tabcol=~/d$/;
+      %hash2=%allplots    if $tabcol=~/p$/;
+      %hash2=%allhosts    if $tabcol=~/s$/;
+      %hash3=%alldates    if $tabcol=~/^d/;
+      %hash3=%allplots    if $tabcol=~/^p/;
+      %hash3=%allhosts    if $tabcol=~/^s/;
+
+      print "<BR><table>\n";
+      foreach my $name1 (sort keys %hash1)
+      {
+        foreach my $name2 (sort keys %hash2)
+        {
+          my $row='';
+          my $rowHasData=0;
+          foreach my $name3 (sort keys %hash3)
+          {
+            my $href=$hrefs{"$name1:$name2:$name3"};
+            #printText("1: $name1 2: $name2 3: $name3");
+
+            $rowHasData=1    if  defined($href);
+            $href=''         if !defined($href);
+            $row.="<td>$href</td>";
+          }
+          print "<tr>$row</tr>\n"    if $rowHasData;
+        }
+      }
+      print "<br></table>\n";
+      print "</html>\n";
+    }
+  }
+  else
+  {
+    fileDispose($pparams, \@returnArray);
+  }
+}
+
+#####################################
+#    R E N D E R    O N E    P L O T
+#####################################
+
+# This renders a single plot
+elsif ($form=~/genplot/)
+{
+  # typical operation is to run locally
+  if ($address eq '')
+  {
+    my $pparams;
+    my $pngFile=buildPngPlot($mycfg, $pparams, $qs);
+    displayText($mycfg, "Created: $pngFile")    if $debug & 1;
+
+    # print file contents and remove file.
+    if (!$pcFlag)
+    {
+      my $contents=`cat $pngFile`;
+      print "Content-type: image/png\n\n";
+      print $contents;
+    }
+    else
+    {
+      # Note we have to do it differently on DOS because there's no equivalent of 'cat file'
+      # and a 'type' command doesn't work on binary data.
+      open PNG, "<$pngFile" or die "<BR>Couldn't open '$pngFile'";
+      binmode PNG;
+      my $contents="";
+      while (my $line=<PNG>)
+      {
+        $contents.=$line;
+      }
+      close PNG;
+
+      open OUT, ">-" or die "<BR>Couldn't open STDOUT";
+      binmode OUT;
+      $|=1;
+
+      print OUT "Content-type: image/png\n\n";
+      print OUT $contents;
+      close OUT;
+    }
+    unlink $pngFile        unless $debug & 4;
+  }
+  else
+  {
+    # Note that '$plots' should always be a singleton
+    displayText($mycfg, "Generate REMOTE plot '$plots' on: $address for $plotfile")    if $debug & 8;
+
+    # by separating the filename from the directory and specifying both to colplot
+    # we can assure ourselves of requesting a single plot
+    my $dirname=dirname($plotfile);
+    my $filename=basename($plotfile);
+    $filename=~/(.*)-\d*\./;
+    my $prefix=$1;
+    my $command="ssh $address $exeName -dir $dirname -contains $prefix -plot $plots -filetype tty ";
+    $command.="-date $fromDate-$thruDate -time $fromTime-$thruTime -width $width -height $height -thick $thick ";
+    $command.=  "-nolegend "                if $legend eq 'off';
+    $command.=  "-adjust "                  if $adjust eq 'on';
+    $command.=  "-noxaxis "                 if $xaxis eq 'off';
+    $command.=  "-xtics $xtics "            if $xtics ne '';
+    $command.=  "-ylog "                    if $ylog eq 'on';
+    $command.=  "-yminwidth $yminwidth "    if $yminwidth!=0;
+    $command.=  "2>/dev/null"               unless $debug & 8;
+    displayText($mycfg, "Command: $command<br>")    if $debug & 1;
+
+    my $contents=`$command`;
+    print "Content-type: image/png\n\n";
+    print $contents;
+  }
+}
+
+else
+{
+  print "<h1>Invalid form: $form</h1>\n";
+}
+htmlFooter();
+
+####################################################
+#    C o m m a n d    L i n e    I n t e r f a c e
+####################################################
+
+sub cli
+{
+  $cliFlag=1;
+
+  # simple defaults
+  $width= (defined($mycfg->{width}))      ? $mycfg->{width} : 1;
+  $height=(defined($mycfg->{htmlHeight})) ? $mycfg->{htmlHeight} : .2;
+  $thick= (defined($mycfg->{thick}))      ? $mycfg->{thick} : 1;
+
+  # These are unique to CLI
+  my ($showParamsFlag, $date, $time, $nolegendFlag, $adjustFlag, $noxaxisFlag);
+  my $filedir='';
+  my $hrefFlag=0;
+
+  # Defaults
+  $pagbrk=0;
+  $yminwidth=0;
+  GetOptions (
+    "debug=i"     => \$debug,
+    "help!"       => sub {usage()},
+    "showplots!"  => sub {showplots($mycfg)},
+    "version!"    => sub {showversion()},
+    "showparams!" => \$showParamsFlag,
+    "dir=s"       => \$dir,
+    "date=s"      => \$date,
+    "time=s"      => \$time,
+    "plots=s"     => \$plots,
+    "filters=s"   => \$filters,
+    "contains=s"  => \$contains,
+    "all!"        => \$anyall,
+    "type=s"      => \$plotType,
+    "height=s"    => \$height,
+    "width=s"     => \$width,
+    "thick=i"     => \$thick,
+    "adjust!"     => \$adjustFlag,
+    "nolegend!"   => \$nolegendFlag,
+    "noxaxis!"    => \$noxaxisFlag,
+    "xtics=i"     => \$xtics,
+    "ylog!"       => \$ylog,
+    "email=s"     => \$email,
+    "filedir=s"   => \$filedir,
+    "filetype=s"  => \$filetype,
+    "incctl!"     => \$incctlFlag,
+    "pagbrk!"     => \$pagbrk,
+    "subject=s"   => \$subject,
+    "oneperday!"  => \$oneperdayFlag,
+    "unique!"     => \$uniqueFlag,
+    "lastmins=i"  => \$winsize,
+    "href!"       => \$hrefFlag,
+    "yminwidth=i" => \$yminwidth
+    ) or error("type -help for help");
+
+  # when writing to an x11 terminal, make sure gnuplot supports it!
+  error("$mycfg->{GnuPlot} does not support x11 graphics. Consider --filedir. See FAQ for details.")
+      if $filedir eq '' && !$x11Flag;
+
+  # Be sure to stash in our configuration for library routines to get to.
+  $mycfg->{debug}=$debug;
+  $mycfg->{htmlflag}=0;
+
+  if (defined($plotType))
+  {
+    error("invalid plottype")    if $plotType!~/^l$|^ls$|^sl$|^p$|^ps$|^sp$/;
+    $plotType='ls'    if $plotType eq 'sl';
+    $plotType='ps'    if $plotType eq 'sp';
+  }
+
+  if (defined($time))
+  {
+    ($fromTime, $thruTime)=split(/-/, $time);
+    error("specifying a 'from' time not allowed with -lastmins")    if defined($winsize) && $fromTime ne '';
+
+    $thruTime='24:00'         if !defined($thruTime);
+    $fromTime="0$fromTime"    if length($fromTime)==4;    # this will be ignored if --lastmins
+    $thruTime="0$thruTime"    if length($thruTime)==4;
+  }
+  else
+  {
+    $fromTime='00:00';
+    $thruTime=(!defined($winsize)) ? '24:00' : '';       # thru time will be last file access time for --lastmins
+  }
+
+  # main logic uses '$email' for both mail AND file output
+  error("invalid file type")                            if $filetype ne '' && $filetype!~/pdf|png|tty/;
+  error("you cannot specify -email AND -file")          if $email ne '' && $filedir ne '';
+  error("you cannot specify -email AND -filetype tty")  if $email ne '' && $filetype eq 'tty';
+  $email=$filedir     if $filedir ne '';
+  $filetype='term'    if $email eq '' && $filetype ne 'tty';
+  $filetype='pdf'     if $filetype eq '' && $email ne '';
+
+  error("you cannot specify -filedir with a file type of 'tty'")
+      if $filetype=~/tty/i && $email ne '';
+
+  error("specify a file to send your pdf or png output to")
+      if $filetype=~/pdf/i && $email eq '';
+
+  error("pdf output requires 'ghostscript' and it can't be found (see '.conf' file)")
+        if $filetype=~/pdf/ && !-e $mycfg->{GS};
+
+  error("-all requires -contains")    if $anyall ne '' && $contains eq '';
+  $anyall=($anyall eq '') ? 'any' : 'all';
+
+  # Convert spaces to commas
+  $plots   =~s/[ ]/,/g;
+  $contains=~s/[ ]/,/g;
+
+  $ylog=$ylog                             ? 'on' : 'off';
+  $pagbrk=$pagbrk                         ? 'on' : 'off';
+  $legend=(!defined($nolegendFlag))       ? 'on' : 'off';
+  $adjust=(defined($adjustFlag))          ? 'on' : 'off';
+  $noxaxisFlag= (!defined($noxaxisFlag))  ? 'on' : 'off';
+  $filetype='pdf'    if $pagbrk eq 'on';
+
+  my $pparams={
+        uitype=>    2,
+        mode=>      '',
+        showparams=>$showParamsFlag,
+	dir=>       $dir,
+	contains=>  $contains,
+	anyall=>    $anyall,
+	plottype=>  $plotType,
+	plots=>     $plots,
+	fdate=>     $fromDate,
+	tdate=>     $thruDate,
+	ftime=>     $fromTime,
+	ttime=>     $thruTime,
+	winsize=>   $winsize,
+	width=>     $width,
+        height=>    $height,
+        thick=>     $thick,
+	any=>       $anyall,
+	legend=>    $legend,
+        adjust=>    $adjust,
+	xaxis=>     $noxaxisFlag,
+        pagbrk=>    $pagbrk,
+        xtics=>     $xtics,
+        ylog=>      $ylog,
+        email=>     $email,
+	filetype=>  $filetype,
+	incctl=>    $incctlFlag,
+	subject=>   $subject,
+        filters=>   $filters,
+        oneperday=> $oneperdayFlag,
+        unique=>    $uniqueFlag,
+        href=>      $hrefFlag,
+        yminwidth=> $yminwidth
+        };
+  $timeframe='float'      if defined($winsize);
+  $pparams->{uitype}=1    if $hrefFlag;
+
+  if (defined($date))
+  {
+    ($fromDate, $thruDate)=split(/-/, $date);
+    $thruDate=$fromDate    if !defined($thruDate);
+    $pparams->{fdate}=$fromDate;
+    $pparams->{tdate}=$thruDate;
+  }
+  else
+  {
+    my $selected={};
+    $pparams->{fdate}=20000101;
+    $pparams->{tdate}=29991231;
+    findFiles(3, $mycfg, $pparams, "$dir$sep*", $selected) || error($notfound);
+    $fromDate=$pparams->{fdate};
+    $thruDate=$pparams->{tdate};
+    #print "Found Files - MinDate: $pparams->{fdate} MaxDate: $pparams->{tdate}\n";
+  }
+
+  validate($pparams);
+
+  #    G e n e r a t e    P l o t s    H e r e
+
+  # If use ^Cs after here we need to delete ctl file
+  $SIG{"INT"}=\&sigInt;
+
+  my @returnArray=buildPage($mycfg, $pparams);
+  if (scalar(@returnArray==0))
+  {
+    printText($notfound);
+  }
+
+  #    D i s p o s e    O f    A n y    F i l e s
+
+  fileDispose($pparams, \@returnArray)    if $pparams->{filetype}!~/term|tty/;
+}
+
+# File disposition should be the same whether on linux or a pc and from a web
+# page or a command line interface (since the display routines are already smart
+# enough to deal with html when necessary)
+sub fileDispose
+{
+  my $pparams=    shift;
+  my $returnArray=shift;
+
+  my $attach=@$returnArray[0];
+  if ($email!~/@/)
+  {
+    # Strip the trailing '*' from the attach name
+    $attach=~s/\*//;
+    if ($pparams->{filetype}=~/pdf/)
+    {
+      printText("Your Plot(s) have been written to ${attach}colplot.pdf", 3);
+    }
+    else
+    {
+      my $prefix=$$;
+      if (!-d $email)
+      {
+        $prefix=basename($email);
+	$email=dirname($email);
+      }
+      printText("Your Plot(s) have been copied to $email with a prefix of '$prefix-'", 3);
+    }
+  }
+  else
+  {
+    # Ship it...
+    my $subject=$pparams->{subject};
+    $subject="Your plot file(s) are attached"    if $subject eq '';
+    my $basename=basename($attach);
+    my $command="$mycfg->{UUENCODE} $attach $basename | $mycfg->{MAIL} -s \"$subject\" $email";
+    printText("Command: $command")    if $debug & 1;
+    `$command`;
+
+    printText("Your Plot(s) have been mailed to $email with a subject of \"$subject\"", 3);
+    `$mycfg->{del} $mycfg->{tempdir}$$-*`    unless $debug & 4;
+  }
+}
+
+########################################
+#    S u p p o r t    F u n c t i o n s
+########################################
+
+sub validate
+{
+  my $pparams=shift;
+
+  #    A P I    C h e c k
+
+  my $uiType= $pparams->{uitype};
+  my $email=  $pparams->{email};
+  my $subject=$pparams->{subject};
+
+  if ( ($uiType==1 && (!defined($email) || $email eq '')  && $subject ne '') ||
+       ($uiType==2 && $email eq '' && $subject ne '') )
+  {
+    my ($apiBase,$apiParams)=loadAPI($pparams);
+
+    no strict 'refs';
+    my $isValid="${apiBase}Valid";
+    my $reason=&$isValid($pparams, $apiParams);
+    error($reason)    if $reason ne '';
+  }
+
+  # we're about to generate a bunch of plots and while we can certainly get
+  # errors the first time through in 'live' mode the rest of the time we won't.
+  # At least for now, a fixed sized window always applies to the ending date
+  $pparams->{fdate}=$pparams->{tdate}    if $mode=~/live/ && $timeframe=~/fixed/;
+
+  # In 'live' mode the ending date should already be today but what about
+  # date changes?  Let's be safe...
+  $pparams->{tdate}=29991231 if $mode=~/live/;
+
+  # make a note of whether or not in we float mode because
+  # colplotlib needs to know
+  $pparams->{timeframe}=($timeframe=~/float/) ? 'float' : 'fixed';
+
+  # dates not normally defined for cli output but if '--lastmins' the thru time may be
+  if (!defined($winsize))
+  {
+    datecheck("From", $pparams->{fdate});
+    datecheck("Thru", $pparams->{tdate});
+    timecheck("From", $pparams->{ftime});
+    error("Thru date must >= From date")    if $pparams->{fdate}>$pparams->{tdate};
+  }
+  timecheck("Thru", $pparams->{ttime})      if !defined($winsize) || $pparams->{ttime} ne '';
+
+  # In 'float' mode, which usually only makes sense in 'live' mode, we need
+  # to reset the from/thru times (and occasionally the dates too!) to the
+  # size of that window.
+  if ($timeframe=~/float/)
+  {
+    # get highest ending time of all the files we're plotting and reset
+    # thru time to it.  NOTE - since colplot does not deal with time in
+    # seconds, we need to add 1 minute to make sure we're past the end of
+    # the time period by rounding up to the next whole minute.
+    findFiles(3, $mycfg, $pparams, "$dir$sep*", undef) || error($notfound);
+
+    # Web-based floating data is always based on the last access time of the file, which findFiles()
+    # returns, but cli-based floating data may be overriden by --time.  If not specified it will also
+    # be based on last access time.  note that this is currently NOT uct based!
+    #print "params->{ttime}: $pparams->{ttime}\n";
+    if (!$cliFlag || $pparams->{ttime} eq '')
+    {
+      my $hour=$pparams->{maxhour};
+      my $mins=$pparams->{maxmins}+1;
+      #print "<br>HOUR: $hour  MINS: $mins\n";
+      if ($mins==60)
+      {
+        $mins=0;
+        $hour++;
+      }
+      $pparams->{ttime}=sprintf("%02d:%02d", $hour, $mins);
+    }
+    my ($hour, $mins)=split(/:/, $pparams->{ttime});
+
+    # now convert latest date/time to seconds so we can subtract the window
+    my $year=substr($pparams->{tdate}, 0, 4);
+    my $mon= substr($pparams->{tdate}, 4, 2);
+    my $day= substr($pparams->{tdate}, 6, 2);
+
+
+    # Be sure to bump day when we cross midnight
+    my ($secs, $lastSecs);
+    if ($hour==24)
+    {
+      $lastSecs=timelocal(0, $mins, 0, $day, $mon-1, $year-1900);
+      $lastSecs+=(3600*24);
+      ($secs, $mins, $hour, $day, $mon, $year)=localtime($lastSecs);
+      $pparams->{tdate}=sprintf("%d%02d%02d", $year+1900, $mon+1, $day);
+    }
+    else
+    {
+      $lastSecs=timelocal(0, $mins, $hour, $day, $mon-1, $year-1900);
+    }
+
+    ($secs, $mins, $hour, $day, $mon, $year)=localtime($lastSecs-$winsize*60);
+    $pparams->{fdate}=sprintf("%d%02d%02d", $year+1900, $mon+1, $day);
+    $pparams->{ftime}=sprintf("%02d:%02d", $hour, $mins);
+  }
+
+  my $width=$pparams->{width};
+  error("Width may not be set to blank")           if $width eq "";
+  $width.=".0"        if $width!~/\./;
+  $width="0$width"    if $width=~/^\./;
+  error("Width must be in numeric format")         if $width!~/\d{1}\.\d{1}/;
+
+  my $height=$pparams->{height};
+  error("Height may not be set to blank")          if $height eq "";
+  $height.=".0"         if $height!~/\./;
+  $height="0$height"    if $height=~/^\./;
+  error("Height must be in numeric format")        if $height!~/\d{1}\.\d{1}/;
+
+  my $thick=$pparams->{thick};
+
+  my $xtics=$pparams->{xtics};
+  error("X Increment must be in numeric format")   if $xtics ne '' && $xtics!~/^\d+$/;
+  error("You must specify at least 1 plot")        if $pparams->{plots} eq '';
+
+  my $filetype=$pparams->{filetype};
+  my $incctlFlag=$pparams->{incctlflag};
+  error("Email or Directory output requires a plot type or control file")
+      if ($email ne '') && $filetype eq 'none' && !$incctlFlag;
+  error("'Page Break' requires 'pdf' plot type")
+      if ($email ne '') && $filetype ne 'pdf' && $pagbrk=~/on/;
+  error("'Include control file' requires 'Email or Local Directory'")
+      if ($email ne '') && $incctlFlag;
+
+  if ( $email ne '' && $email=~/@/)
+  {
+    error("email only allowed on UNIX boxes")
+	if $pcFlag;
+    my @temp=split(/@/, $email);
+    error("too many '\@'s in email address")
+        if scalar(@temp)!=2;
+    error("'$temp[1]' doesn't look like a domain name")
+	if $temp[1]!~/^[a-zA-Z0-9.]+$/|| $temp[1]=~/\.$/;
+  }
+  elsif ($email ne '')
+  {
+    # if we can't find $email, we take it to be of the form /dir/prefix,
+    # but of so the directory better exist.  In other words it can't be
+    # of the form /dir/prefix/prefix
+    my $htmlFlag=$mycfg->{htmlflag};
+    my $dirname=(-d $email) ? $email : dirname($email);
+    my $basename=basename($email);
+    error("Directory '$dirname' does not exist")
+        if !-e $dirname;
+    error("Directory '$dirname' requires write access for all (for web server)")
+	if $htmlFlag && ((stat($dirname))[2] & 7) != 7;
+  }
+  return;
+}
+
+sub loadAPI
+{
+  my $pparams=shift;
+
+  my ($apiFile, $apiParams)=split(/,/, $pparams->{subject}, 2);
+  my $apiBase=basename($apiFile);
+  my $apiDir= dirname($apiFile);
+  $apiBase=~s/\.ph//;    # remove extension if there
+
+  # look for api file in current direcory first, then libdir
+  my $found='';
+  foreach my $dir ('.', $mycfg->{libdir})
+  {
+    my $fullpath="$dir$sep${apiBase}.ph";
+    next    if !-e $fullpath;
+
+    $found=$fullpath;
+    last;
+  }
+  error("cannot find $apiBase in default directory OR '$mycfg->{libdir}'")    if $found eq '';
+
+  my $params=(defined($apiParams)) ? ",$apiParams" : '';
+  $pparams->{subject}="API:$found$params";     # put back together
+  printText("Found api file: $pparams->{subject}")    if $debug & 1;
+
+  # is this api module valid in the context it's being used?
+  require $found;
+  my $isValid="${apiBase}Valid";
+
+  # need to disable 'strict' for access
+  no strict 'refs';
+  my $reason=&$isValid($pparams, $apiParams);
+  error($reason)    if $reason ne '';
+  return(($apiBase,$apiParams));
+}
+
+sub datecheck
+{
+  my $type=shift;
+  my $date=shift;
+
+  error("$type date must be in 'yyyymmdd' format")
+	if $date!~/^\d{8}$/;
+}
+
+sub timecheck
+{
+  my $type=shift;
+  my $time=shift;
+
+  error("$type time must be in hh:mm[:ss] format")           if $time!~/^\d+:\d{2}$|^\d+:\d{2}:\d{2}$/;
+  my ($hh, $mm,$ss)=split(/:/, $time);
+  error("$type time cannot be greater than 24:00:00")        if $hh>23 && $time gt "24:00";
+  error("$type minutes must be less than 60")                if $mm>59;
+  error("$type seconds must be less than 60")                if defined($ss) && $ss>59;
+}
+
+sub sigInt
+{
+  print "Ouch...\n";
+  my $tempDir=$mycfg->{tempdir};
+  my $ctlFile="$tempDir$$-colplot.ctl";
+  unlink $ctlFile;
+  exit;
+}
+
+
+# The whole purpose of this is to allow us to call liberror w/o having to
+# pass '$mycfg' on each call.
+sub error
+{
+  displayText($mycfg, $_[0], 3);
+  exit;
+}
+
+# Like 'error', this allows us to use 'displayText' w/o passing '$mycfg' each call
+sub printText
+{
+  my $text= shift;
+  my $level=shift;
+
+  displayText($mycfg, $text, $level);
+}
+
+sub showplots
+{
+  my $mycfg=shift;
+
+  $config={};
+  exit(0)    if !initParamsInit($mycfg, $config);
+
+  # Being lazy, let's sort the descriptions by category, modifier and type this way.
+  my %sorted;
+  my $numPlots=0;
+  foreach my $plotname (keys %{$config->{PlotDesc}})
+  {
+    my $cat= $config->{PlotDesc}->{$plotname}->{cat};
+    my $type=$config->{PlotDesc}->{$plotname}->{type};
+    my $mod= (defined($config->{PlotDesc}->{$plotname}->{mod})) ?
+		$config->{PlotDesc}->{$plotname}->{mod} : '';
+
+    # temporarily change the type of detail and macros to force their sort
+    $type='y'    if $type eq 'd';
+    $type='z'    if $type eq 'm';
+    $sorted{"$type:$cat:$mod:$plotname"}='';
+    $numPlots++;
+  }
+
+  if ($mycfg->{htmlflag})
+  {
+    htmlHeader($mycfg, "Show Plots");
+
+    # With a browers, we're going to do this in 2 columns and so need a second
+    # hash which sorts such that they can be processed one row at a time.
+    my $num=0;
+    my $numCol=2;
+    my $numPerCol=int(($numPlots+1)/$numCol);
+    my %byRow;
+    foreach my $key (sort keys %sorted)
+    {
+      my $col=int($num/$numPerCol);
+      my $key2=sprintf("%03d:$key", int($num/$numPerCol)+($num % $numPerCol)*$numCol);
+      $byRow{$key2}='';
+      $num++;
+    }
+
+    print "<body>\n";
+    print "<center>\n";
+    print "<h2>Plot Descriptions\n";
+    print "<table>\n";
+    print "<tr>\n";
+    print "  <td><b>Plot</b></td><td><b>Subsys</b></td><td><b>Type</b></td><td><b>Description</b></td>\n";
+    print "  <td><b>Plot</b></td><td><b>Subsys</b></td><td><b>Type</b></td><td><b>Description</b></td>\n";
+    print "</tr>\n";
+
+    $num=0;
+    foreach my $key (sort keys %byRow)
+    {
+      my ($num, $type, $cat, $mod, $plotname)=(split(/:/, $key));
+      my $desc=$config->{PlotDesc}->{$plotname}->{desc};
+      $type='d'    if $type eq 'y';
+      $type=' '    if $type eq 'z';
+
+      print "<tr>"       if ($num % $numCol)==0;
+      print "<td>$plotname</td><td>$cat</td><td>$type</td><td>$desc</td>";
+      print "</tr>\n"    if ($num % $numCol)==$numCol;
+      $num++
+    }
+    print "</table>\n";
+
+    print "<p><input type=button value='Close Window' onclick='window.close()'>\n";
+    print "</center>\n";
+    htmlFooter($mycfg);
+    exit;
+  }
+
+  # This is for terminal-based output
+  foreach my $key (sort keys %sorted)
+  {
+    my ($type, $cat, $mod, $plotname)=split(/:/, $key);
+
+    $type='d'    if $type eq 'y';   # details
+    $type=''     if $type eq 'z';   # macros
+
+    printf "%-11s %-6s  %1s  %s\n", $plotname, $cat, $type, $config->{PlotDesc}->{$plotname}->{desc};
+  }
+  exit;
+}
+
+sub showversion
+{
+  my $libs=($pngFlag) ? '[png,' : '[nopng,';
+  $libs.=($x11Flag) ? 'x11]' : 'nox11]';
+  printText("colplot: V$Version, gnuplot: V:$mycfg->{GnuVersion}$libs\n\n$Copyright\n$License");
+  exit;
+}
+
+sub usage
+{
+  my $help=<<EOF;
+usage: colplot.pl [-switches]
+Data, Date and Time
+  -dir        dir      directory containing plot files
+  -contains   string   plot files containing any strings
+  -all                 plot files containing all strings
+  -date       date     date range in yyyymmdd[-yyyymmdd] format
+  -lastmins   mins     plot ending time based on file last access time
+  -time       time     time range in hh:mm[-hh:mm] format
+
+Plot types and filters
+  -plots      plots    list of plots
+  -filters    list     list of detail device filters
+  -type       type     display ALL plots using this format
+                         l - lines     sl - stacked lines
+                         p - points    sp - stacked points
+  -unique              only plot files generated with -ou
+  -nounique            only plot files generated without -ou
+
+Plot formats
+  -adjust              adjust height of plot if not enough room for legend
+  -filetype   type     type of output/email file
+                         pdf    single pdf file (default)
+                         png    each plot should be an individual png file
+                         tty    write single png plot to directly to tty
+  -height     value    plot height (1 = full page)
+  -nolegend            do not print a legend
+  -noxaxis             do not print X-axis
+  -thick      value    plot line thickness
+  -width      value    plot width (1 = full page)
+  -xtics      value    specify tic marks every 'value' seconds
+  -ylog                use logarithmic Y-axis
+
+Remote plotting
+  -href                display hrefs associated with this request
+
+Plot Destination
+  -email      address  address to email results to
+  -filedir    dir      local location to copy results to
+                       CAUTION - webservers need write access to all
+  -incctl              include gnu control file with file/email
+  -pagbrk              break pdf pages for each system
+  -subject    subj     subject for email
+
+Help
+  -help                print this text
+  -showplots           show list of valid plot types
+  -showparams          show plotting parameters to be used for each file
+                       as an aid for helping to debug custom plots
+  -version             show version information
+
+$Copyright
+
+EOF
+print $help;
+exit;
+}

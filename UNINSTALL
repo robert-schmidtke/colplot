@@ -1,0 +1,56 @@
+#!/bin/bash
+
+#    R e m o v e    O L D    S t r u c t u r e    I f   T h e r e
+
+BINDIR=/opt/hp/collectl
+
+if [ -e $BINDIR ]; then
+
+  # just uninstall utilities leaving collectl alone. 
+  # if only utilities you much manually remove /opt/hp/collectl/*
+  cd $BINDIR/docs
+  rm -f RELEASE-colplot RELEASE-colmux RELEASE-collectl-utils
+  rm -f INSTALL-colplot README FAQ-colplot.html colplot-help.html
+
+  cd $BINDIR/sbin
+  rm -f colplot.pl colplot.conf colmux.pl
+
+  cd $BINDIR/man1
+  rm -f colplot* colmux*
+
+  rm -f $BINDIR/etc/colplot-apache.conf
+
+  # only utilities use these
+  rm -fr $BINDIR/lib
+  rm -fr $BINDIR/plotfiles
+fi
+
+#    N e w    D i r e c t o r y    S t r u c t u r e
+
+BINDIR=/usr/bin
+DOCDIR=/usr/share/doc/collectl
+SHRDIR=/usr/share/collectl
+
+rm -f  $BINDIR/colplot
+rm -f  $BINDIR/colmux
+rm -f  $SHRDIR/colplotlib.defs
+rm -f  $SHRDIR/colplotlib.ph
+rm -f  $SHRDIR/tiny.ph
+rm -f  $SHRDIR/oneperpage.ph
+rm -fr $SHRDIR/plotfiles
+rm -fr $DOCDIR
+
+rm -f /usr/share/man/man1/colplot.1.gz
+rm -f /usr/share/man/man1/colmux.1.gz
+
+#    C l e a n    U p    W e b    S t r u c t u r e
+
+rm -fr /var/www/colplot           # debian
+rm -fr /var/www/html/colplot      # redhat
+rm -fr /srv/www/htdocs/colplot    # SuSE
+
+if [ -e /etc/apache2 ]; then
+  echo "removing colplot from apache2 configuration"
+  a2dissite colplot-apache
+  service apache2 restart
+fi
