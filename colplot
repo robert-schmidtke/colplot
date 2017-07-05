@@ -889,7 +889,7 @@ sub cli
   $thick= (defined($mycfg->{thick}))      ? $mycfg->{thick} : 1;
 
   # These are unique to CLI
-  my ($showParamsFlag, $date, $time, $nolegendFlag, $adjustFlag, $noxaxisFlag);
+  my ($showParamsFlag, $date, $time, $nodatefixFlag, $nolegendFlag, $adjustFlag, $noxaxisFlag);
   my $filedir='';
   my $hrefFlag=0;
 
@@ -905,6 +905,7 @@ sub cli
     "dir=s"       => \$dir,
     "date=s"      => \$date,
     "time=s"      => \$time,
+    "nodatefix!"  => \$nodatefixFlag,
     "plots=s"     => \$plots,
     "filters=s"   => \$filters,
     "contains=s"  => \$contains,
@@ -990,6 +991,7 @@ sub cli
   $legend=(!defined($nolegendFlag))       ? 'on' : 'off';
   $adjust=(defined($adjustFlag))          ? 'on' : 'off';
   $noxaxisFlag= (!defined($noxaxisFlag))  ? 'on' : 'off';
+  $nodatefixFlag= (!defined($nodatefixFlag))  ? 'on' : 'off';
   $filetype='pdf'    if $pagbrk eq 'on';
 
   my $pparams={
@@ -1005,6 +1007,7 @@ sub cli
 	tdate=>     $thruDate,
 	ftime=>     $fromTime,
 	ttime=>     $thruTime,
+  datefix=>   $nodatefixFlag,
 	winsize=>   $winsize,
 	width=>     $width,
         height=>    $height,
@@ -1451,6 +1454,8 @@ Data, Date and Time
   -date       date     date range in yyyymmdd[-yyyymmdd] format
   -lastmins   mins     plot ending time based on file last access time
   -time       time     time range in hh:mm[-hh:mm] format
+  -nodatefix           do not calculate end of date range from file name
+                       and instead take -date literally
 
 Plot types and filters
   -plots      plots    list of plots

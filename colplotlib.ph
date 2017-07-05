@@ -771,6 +771,12 @@ sub buildPage
   }
   return(())    if !$match;
 
+  if ($pparams->{datefix} eq 'off')
+  {
+    $pparams->{fdate}=$saveFrom;
+    $pparams->{tdate}=$saveThru;
+  }
+
   showSelected($mycfg, 'Step1', $selected, 1)    if $debug & 32;
 
   ##########################################################
@@ -1153,6 +1159,7 @@ sub buildPngPlot
     $pparams->{tdate}=$value       if $name=~/^tdate/;
     $pparams->{ftime}=$value       if $name=~/^ftime/;
     $pparams->{ttime}=$value       if $name=~/^ttime/;
+    $pparams->{datefix}=$value     if $name=~/^datefix/;
     $pparams->{timeframe}=$value   if $name=~/^timeframe/;
     $pparams->{winsize}=$value     if $name=~/^winsize/;
     $pparams->{width}=$value       if $name=~/^width/;
@@ -1997,12 +2004,20 @@ sub plotit
   my ($fromTime, $thruTime, $fromDate, $thruDate);
   $fromTime=    $pparams->{ftime};
   $thruTime=    $pparams->{ttime};
-  $fromDate=$allplots->[$firstIndex]->{fullname};    # first one that exists
-  $fromDate=~/-(\d{8})[.-]/;
-  $fromDate=$1;
-  $thruDate=$allplots->[$lastIndex]->{fullname};
-  $thruDate=~/-(\d{8})[.-]/;
-  $thruDate=$1;
+  if ($pparams->{datefix} eq 'on')
+  {
+    $fromDate=$allplots->[$firstIndex]->{fullname};    # first one that exists
+    $fromDate=~/-(\d{8})[.-]/;
+    $fromDate=$1;
+    $thruDate=$allplots->[$lastIndex]->{fullname};
+    $thruDate=~/-(\d{8})[.-]/;
+    $thruDate=$1;
+  }
+  else
+  {
+    $fromDate=$pparams->{fdate};
+    $thruDate=$pparams->{tdate};
+  }
 
   # If file from a different timezone, reset the from/thru times based on the difference
   my $tzone=$allplots->[$firstIndex]->{tzone};
